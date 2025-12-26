@@ -1,0 +1,6 @@
+csrc
+*.daidir
+simv
+*.log
+*.key
+*.json
