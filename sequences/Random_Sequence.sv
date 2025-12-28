@@ -1,26 +1,42 @@
-class Random_Sequence extends uvm_sequence #(Adder_sequence_item);
-    //1. an Object
-    `uvm_object_utils(Random_Sequence)
+//------------------------------------------------------------------------------
+// Random Sequence - Random FIFO operations
+//------------------------------------------------------------------------------
+class random_sequence extends apb_base_sequence;
+  
+  `uvm_object_utils(random_sequence)
+  
+  rand int num_transactions;
+  
+  constraint num_trans_c {
+    num_transactions inside {[50:200]};
+  }
+  
+  function new(string name = "random_sequence");
+    super.new(name);
+  endfunction : new
+  
+  task body();
+    apb_sequence_item item;
     
-
-    //3. Constructor
-    function new(string name = "Random_Sequence");
-        super.new(name);
-    endfunction: new
-
-    //4. Task body
-    task body();
-
-        repeat(5) begin
-        Adder_sequence_item transaction = Adder_sequence_item::type_id::create("transaction");
-
-        transaction.randomize() with {reset == 0; valid == 1;};
+    `uvm_info("SEQ", $sformatf("Starting Random Sequence with %0d transactions", num_transactions), UVM_MEDIUM)
     
-        start_item(transaction);
-            `uvm_info(get_type_name(), $sformatf("Random_Sequence:  \n %s", transaction.sprint()),UVM_NONE)
-        finish_item(transaction);
+    // Enable FIFO first
+    enable_fifo();
     
-        end 
-     
-    endtask: body
-endclass: Random_Sequence
+    for (int i = 0; i < num_transactions; i++) begin
+      item = apb_sequence_item::type_id::create("item");
+      start_item(item);
+      
+      if (!item.randomize()) begin
+        `uvm_error("SEQ", "Randomization failed")
+      end
+      
+      finish_item(item);
+      
+      `uvm_info("SEQ", $sformatf("Transaction %0d: %s", i, item.convert2string()), UVM_HIGH)
+    end
+    
+    `uvm_info("SEQ", "Random Sequence Complete", UVM_MEDIUM)
+  endtask : body
+  
+endclass : random_sequence

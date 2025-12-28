@@ -1,0 +1,23 @@
+//------------------------------------------------------------------------------
+// Reset Test - Tests reset behavior
+//------------------------------------------------------------------------------
+class reset_test extends apb_fifo_base_test;
+  
+  `uvm_component_utils(reset_test)
+  
+  function new(string name = "reset_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction : new
+  
+  task run_phase(uvm_phase phase);
+    reset_sequence seq;
+    
+    phase.raise_objection(this);
+    
+    seq = reset_sequence::type_id::create("seq");
+    seq.start(env.agent.sequencer);
+    
+    phase.drop_objection(this);
+  endtask : run_phase
+  
+endclass : reset_test
