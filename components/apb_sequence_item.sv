@@ -20,20 +20,20 @@ class apb_sequence_item extends uvm_sequence_item;
         // [0]: EN
         // [1]: CLR
         // [2]: DROP_ON_FULL
-    (paddr == CTRL_OFFSET) -> pwdata[31:3] == 29'h0;
+        (paddr == CTRL_OFFSET) -> pwdata[31:3] == 29'h0;
     }
 
     // THRESH register constraint
     constraint thresh_reg_c {
-    // [15:8] almost_empty_th
-    // [7:0]  almost_full_th  
-    (paddr == THRESH_OFFSET) -> pwdata[31:16] == 16'h0;
+        // [15:8] almost_empty_th
+        // [7:0]  almost_full_th  
+        (paddr == THRESH_OFFSET) -> pwdata[31:16] == 16'h0;
     }
 
     // ToDo Write data constraint for DATA register (8-bit) ---------> todo need to check that (the least or most significant 8 bit )
     constraint data_reg_c {
         // data needs just [7:0] valid, upper bits zero
-    (paddr == DATA_OFFSET) -> pwdata[31:8] == 24'h0;
+        (paddr == DATA_OFFSET) -> pwdata[31:8] == 24'h0;
     }
 
     // status register is read-only - no constraint needed
