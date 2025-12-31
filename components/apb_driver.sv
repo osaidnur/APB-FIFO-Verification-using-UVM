@@ -21,6 +21,20 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         end
     endfunction : build_phase
 
+
+    // --------------------------------------------------------------------------
+    // Reset Signals
+    // --------------------------------------------------------------------------
+    task drive_idle();
+        vif.drv_cb.PSEL <= 1'b0;
+        vif.drv_cb.PENABLE <= 1'b0;
+        vif.drv_cb.PWRITE <= 1'b0;
+        vif.drv_cb.PADDR <= 8'h0;
+        vif.drv_cb.PWDATA <= 32'h0;
+    endtask : drive_idle
+
+
+
     // --------------------------------------------------------------------------
     // Run Phase
     // --------------------------------------------------------------------------
@@ -49,16 +63,7 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
     endtask : run_phase
 
 
-    // --------------------------------------------------------------------------
-    // Reset Signals
-    // --------------------------------------------------------------------------
-    task drive_idle();
-        vif.drv_cb.PSEL <= 1'b0;
-        vif.drv_cb.PENABLE <= 1'b0;
-        vif.drv_cb.PWRITE <= 1'b0;
-        vif.drv_cb.PADDR <= 8'h0;
-        vif.drv_cb.PWDATA <= 32'h0;
-    endtask : drive_idle
+    
 
     // // --------------------------------------------------------------------------
     // // Drive Write Transaction (APB3 Protocol)
