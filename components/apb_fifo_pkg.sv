@@ -46,7 +46,7 @@ package apb_fifo_pkg;
     `include "../sequences/overflow_sequence.sv"
     `include "../sequences/underflow_sequence.sv"
     `include "../sequences/threshold_sequence.sv"
-    `include "../sequences/clear_sequence.sv"
+    `include "../sequences/fifo_clear_sequence.sv"
     `include "../sequences/random_sequence.sv"
     `include "../sequences/reg_access_sequence.sv"
     `include "../sequences/full_coverage_sequence.sv"
@@ -66,4 +66,5 @@ package apb_fifo_pkg;
     `include "../tests/full_coverage_test.sv"
     `include "../tests/stress_test.sv"
     `include "../tests/back_to_back_test.sv"
+    `include "../tests/clear_test.sv"
 endpackage : apb_fifo_pkg
