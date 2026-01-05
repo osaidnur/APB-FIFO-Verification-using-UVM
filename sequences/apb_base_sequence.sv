@@ -64,7 +64,6 @@ class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
             write_reg(CTRL_OFFSET, ctrl_val & ~32'h4); // Clear DOF bit
     endtask : set_drop_on_full
 
-return {18'h0, count[7:0], underflow_flag, overflow_flag, almost_empty_flag, almost_full_flag, full_flag, empty_flag}
     // Read STATUS register
     task read_status(output bit empty, output bit full,output bit almost_full, output bit almost_empty, output bit overflow, output bit underflow, output bit [7:0] count);
         bit [31:0] status;
