@@ -76,7 +76,7 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
             endcase
         end
         
-        `uvm_info("SCB", ref_model.get_debug_string(), UVM_HIGH)
+        `uvm_info("SCB", ref_model.print_status(), UVM_HIGH)
     endfunction : write
 
     //--------------------------------------------------------------------------

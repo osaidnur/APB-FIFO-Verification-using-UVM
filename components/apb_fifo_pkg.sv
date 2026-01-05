@@ -32,7 +32,7 @@ package apb_fifo_pkg;
     `include "apb_monitor.sv"
     `include "apb_agent.sv"
     `include "apb_fifo_scoreboard.sv"
-    `include "apb_fifo_coverage.sv"
+    `include "apb_subscriber.sv"
     `include "apb_fifo_env.sv"
 
     //--------------------------------------------------------------------------
@@ -47,7 +47,7 @@ package apb_fifo_pkg;
     `include "../sequences/underflow_sequence.sv"
     `include "../sequences/threshold_sequence.sv"
     `include "../sequences/fifo_clear_sequence.sv"
-    `include "../sequences/random_sequence.sv"
+    `include "../sequences/Random_Sequence.sv"
     `include "../sequences/reg_access_sequence.sv"
     `include "../sequences/full_coverage_sequence.sv"
     `include "../sequences/back_to_back_sequence.sv"
