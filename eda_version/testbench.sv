@@ -1,9 +1,10 @@
-`timescale 1ns/1ps
-
 //===============================================================================
 // Interface Definition
 //===============================================================================
-interface apb_fifo_if(input logic PCLK, input logic PRESETn);
+interface apb_fifo_if(input logic PCLK);
+
+    // Reset signal
+    input logic PRESETn;
 
     // input to the DUT
     logic PSEL;
@@ -20,6 +21,7 @@ interface apb_fifo_if(input logic PCLK, input logic PRESETn);
     // Driver clocking block
     clocking drv_cb @(posedge PCLK);
         default input #1ns output #1ns;
+        output PRESETn;
         output PSEL;
         output PENABLE;
         output PWRITE;
@@ -33,6 +35,7 @@ interface apb_fifo_if(input logic PCLK, input logic PRESETn);
     // Monitor clocking block
     clocking mon_cb @(posedge PCLK);
         default input #1ns output #1ns;
+        input PRESETn;
         input PSEL;
         input PENABLE;
         input PWRITE;
@@ -97,40 +100,41 @@ module top_tb;
     
     // Clock and Reset
     logic PCLK;
-    logic PRESETn;
+    // logic PRESETn;
     
     // Clock Generation - 100MHz
     initial begin
         PCLK = 0;
-        forever #5 PCLK = ~PCLK;  // 10ns period = 100MHz
+        forever #5 PCLK = ~PCLK;
     end
     
-    // Reset Generation
-    initial begin
-        PRESETn = 0;
-        repeat(5) @(posedge PCLK);
-        PRESETn = 1;
-        `uvm_info("TOP", "Reset released", UVM_LOW)
-    end
+    // // Reset Generation
+    // initial begin
+    //     PRESETn = 0;
+    //     `uvm_info("TOP", "***** Asserting reset *****", UVM_LOW)
+    //     repeat(5) @(posedge PCLK);
+    //     PRESETn = 1;
+    //     `uvm_info("TOP", "***** Reset released *****", UVM_LOW)
+    // end
     
     
     // Interface Instance
-    apb_fifo_if apb_if(PCLK, PRESETn);
+    apb_fifo_if apb_if(PCLK);
 
     // DUT Instance
     apb_sync_fifo #(
         .WIDTH(FIFO_WIDTH),
         .DEPTH(FIFO_DEPTH)
     ) dut (
-        .PCLK    (PCLK),
-        .PRESETn (PRESETn),
-        .PSEL    (apb_if.PSEL),
+        .PCLK (PCLK),
+        .PRESETn (apb_if.PRESETn),
+        .PSEL (apb_if.PSEL),
         .PENABLE (apb_if.PENABLE),
-        .PWRITE  (apb_if.PWRITE),
-        .PADDR   (apb_if.PADDR),
-        .PWDATA  (apb_if.PWDATA),
-        .PRDATA  (apb_if.PRDATA),
-        .PREADY  (apb_if.PREADY),
+        .PWRITE (apb_if.PWRITE),
+        .PADDR (apb_if.PADDR),
+        .PWDATA (apb_if.PWDATA),
+        .PRDATA (apb_if.PRDATA),
+        .PREADY (apb_if.PREADY),
         .PSLVERR (apb_if.PSLVERR)
     );
     
@@ -142,8 +146,7 @@ module top_tb;
     end
     
     //--------------------------------------------------------------------------
-    // Start Test
-    // Change test name here to run different tests:
+    // Tests Map:
     // - reset_test
     // - basic_operation_test
     // - overflow_test
@@ -157,7 +160,7 @@ module top_tb;
     // - clear_test
     //--------------------------------------------------------------------------
     initial begin
-        run_test("overflow_test");
+        run_test("basic_operation_test");
     end
     
     // Simulation Timeout

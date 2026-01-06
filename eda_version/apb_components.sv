@@ -2,6 +2,9 @@
 // Sequence Item - APB Transaction
 // ==============================================================================
 class apb_sequence_item extends uvm_sequence_item;
+    
+    // Reset signal
+    rand bit presetn;
 
     // inputs to DUT
     rand bit pwrite;
@@ -38,8 +41,14 @@ class apb_sequence_item extends uvm_sequence_item;
         (paddr == DATA_OFFSET) -> pwdata[31:8] == 24'h0;
     }
 
+    // Constraint: Reset is typically high during normal operations
+    constraint reset_default_c {
+        presetn == 1'b1;
+    }
+
     // macros
     `uvm_object_utils_begin(apb_sequence_item)
+    `uvm_field_int(presetn, UVM_ALL_ON)
     `uvm_field_int(pwrite, UVM_ALL_ON)
     `uvm_field_int(paddr, UVM_ALL_ON)
     `uvm_field_int(pwdata, UVM_ALL_ON)
@@ -58,6 +67,7 @@ class apb_sequence_item extends uvm_sequence_item;
     //     string s;
     //     s = $sformatf("\n========== APB Transaction ==========");
     //     s = {s, $sformatf("\n  Operation : %s", pwrite.name())};
+    //     s = {s, $sformatf("\n  Reset     : %0d", presetn)};
     //     s = {s, $sformatf("\n  Address   : 0x%02h", paddr)};
     //     if (pwrite == APB_WRITE)
     //         s = {s, $sformatf("\n  Write Data: 0x%08h", pwdata)};
@@ -121,6 +131,7 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
     // Reset Signals
     // --------------------------------------------------------------------------
     task drive_idle();
+        vif.drv_cb.PRESETn <= 1'b1;
         vif.drv_cb.PSEL <= 1'b0;
         vif.drv_cb.PENABLE <= 1'b0;
         vif.drv_cb.PWRITE <= 1'b0;
@@ -139,6 +150,8 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
 
         forever begin
             seq_item_port.get_next_item(item);
+            `uvm_info("Driver", $sformatf("Driving %s transaction: addr=0x%02h, pwdata=0x%0h", item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata),
+                      UVM_MEDIUM)
             drive(item);
             seq_item_port.item_done();
         end
@@ -149,14 +162,29 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
     // --------------------------------------------------------------------------
     task drive(apb_sequence_item tr);
         
-        // Wait until reset is deasserted
-        while (vif.PRESETn !== 1'b1) begin
-            drive_idle();
+        // // Wait until reset is deasserted
+        // while (vif.PRESETn !== 1'b1) begin
+        //     drive_idle();
+        //     @(vif.drv_cb);
+        // end
+
+        // Drive reset signal from transaction
+        vif.drv_cb.PRESETn <= tr.presetn;
+        
+        // If reset is asserted, just drive reset and return
+        if (tr.presetn == 1'b0) begin
+            vif.drv_cb.PSEL <= 1'b0;
+            vif.drv_cb.PENABLE <= 1'b0;
+            vif.drv_cb.PWRITE <= 1'b0;
+            vif.drv_cb.PADDR <= 8'h0;
+            vif.drv_cb.PWDATA <= 32'h0;
             @(vif.drv_cb);
+            return;
         end
 
         // SETUP cycle
         @(vif.drv_cb);
+        vif.drv_cb.PRESETn <= tr.presetn;
         vif.drv_cb.PSEL <= 1'b1;
         vif.drv_cb.PENABLE <= 1'b0;
         vif.drv_cb.PWRITE <= tr.pwrite;
@@ -227,11 +255,11 @@ class apb_monitor extends uvm_monitor;
         @(posedge vif.PRESETn);
 
         forever begin
-            @(posedge vif.mon_cb);
+            @(vif.mon_cb);
             // APB transfer completes when PSEL=1, PENABLE=1, PREADY=1
             if (vif.PSEL && vif.PENABLE && vif.PREADY) begin
                 item = apb_sequence_item::type_id::create("item", this);
-
+                `uvm_info("Monitor", $sformatf("Monitoring %s transaction: addr=0x%02h, pwdata=0x%0h", vif.PWRITE ? "WRITE" : "READ", vif.PADDR, vif.PWDATA), UVM_MEDIUM)
                 item.paddr   = vif.PADDR;
                 item.pwrite  = vif.PWRITE;
                 item.pwdata  = vif.PWDATA;
@@ -563,7 +591,6 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
         super.build_phase(phase);
         analysis_export = new("analysis_export", this);
         ref_model = new();
-        `uvm_info("SCB", "Reference model created", UVM_MEDIUM)
     endfunction : build_phase
 
     //--------------------------------------------------------------------------
@@ -576,16 +603,16 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
         
         total_transactions++;
         
-        `uvm_info("SCB", $sformatf("Processing: %s to Addr=0x%02h", item.pwrite ? "WRITE" : "READ", item.paddr), UVM_HIGH)
+        `uvm_info("Scoreboard", $sformatf("Processing: %s to Addr=0x%02h, pwrite=%0b", item.pwrite ? "WRITE" : "READ", item.paddr, item.pwrite), UVM_MEDIUM)
         
         // WRITE transactions :
         if (item.pwrite == APB_WRITE) begin
             case (item.paddr)
                 CTRL_OFFSET: ref_model.write_ctrl(item.pwdata);
                 THRESH_OFFSET: ref_model.write_thresh(item.pwdata);
-                STATUS_OFFSET: `uvm_warning("SCB", "STATUS register is read-only, write ignored")
+                STATUS_OFFSET: `uvm_warning("Scoreboard", "STATUS register is read-only, write ignored")
                 DATA_OFFSET: void'(ref_model.push(item.pwdata));
-                default: `uvm_warning("SCB", $sformatf("Unknown register address: 0x%02h", item.paddr))
+                default: `uvm_warning("Scoreboard", $sformatf("Unknown register address: 0x%02h", item.paddr))
             endcase
         end 
         
@@ -612,7 +639,7 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
             endcase
         end
         
-        `uvm_info("SCB", ref_model.print_status(), UVM_HIGH)
+        `uvm_info("Scoreboard", ref_model.print_status(), UVM_HIGH)
     endfunction : write
 
     //--------------------------------------------------------------------------
@@ -621,11 +648,10 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
     function void compare(string reg_name, bit [31:0] expected, bit [31:0] actual);
         if (actual !== expected) begin
             fail_count++;
-            `uvm_error("SCB", $sformatf("%s Mismatch: Expected=0x%08h, Actual=0x%08h",
-                    reg_name, expected, actual))
+            `uvm_error("Scoreboard", $sformatf("%s Mismatch: Expected=0x%08h, Actual=0x%08h", reg_name, expected, actual))
         end else begin
             pass_count++;
-            `uvm_info("SCB", $sformatf("%s Match: 0x%08h", reg_name, actual), UVM_HIGH)
+            `uvm_info("Scoreboard", $sformatf("%s Match: 0x%08h", reg_name, actual), UVM_MEDIUM)
         end
     endfunction : compare
 
@@ -635,23 +661,23 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
         
-        `uvm_info("SCB", "╔══════════════════════════════════════════╗", UVM_NONE)
-        `uvm_info("SCB", "║      SCOREBOARD SUMMARY REPORT           ║", UVM_NONE)
-        `uvm_info("SCB", "╠══════════════════════════════════════════╣", UVM_NONE)
-        `uvm_info("SCB", $sformatf("║  Total Transactions: %5d              ║", total_transactions), UVM_NONE)
-        `uvm_info("SCB", $sformatf("║  Passed Checks:      %5d              ║", pass_count), UVM_NONE)
-        `uvm_info("SCB", $sformatf("║  Failed Checks:      %5d              ║", fail_count), UVM_NONE)
-        `uvm_info("SCB", $sformatf("║  Final FIFO Count:   %5d              ║", ref_model.get_count()), UVM_NONE)
-        `uvm_info("SCB", "╚══════════════════════════════════════════╝", UVM_NONE)
+        `uvm_info("Scoreboard", "╔══════════════════════════════════════════╗", UVM_NONE)
+        `uvm_info("Scoreboard", "║      SCOREBOARD SUMMARY REPORT           ║", UVM_NONE)
+        `uvm_info("Scoreboard", "╠══════════════════════════════════════════╣", UVM_NONE)
+        `uvm_info("Scoreboard", $sformatf("║  Total Transactions: %5d               ║", total_transactions), UVM_NONE)
+        `uvm_info("Scoreboard", $sformatf("║  Passed Checks:      %5d               ║", pass_count), UVM_NONE)
+        `uvm_info("Scoreboard", $sformatf("║  Failed Checks:      %5d               ║", fail_count), UVM_NONE)
+        `uvm_info("Scoreboard", $sformatf("║  Final FIFO Count:   %5d               ║", ref_model.get_count()), UVM_NONE)
+        `uvm_info("Scoreboard", "╚══════════════════════════════════════════╝", UVM_NONE)
         
         if (fail_count > 0) begin
-            `uvm_info("SCB", "┌─────────────────────────────────────────┐", UVM_NONE)
-            `uvm_info("SCB", "│           ✘ TEST FAILED ✘               │", UVM_NONE)
-            `uvm_info("SCB", "└─────────────────────────────────────────┘", UVM_NONE)
+            `uvm_info("Scoreboard", "┌─────────────────────────────────────────┐", UVM_NONE)
+            `uvm_info("Scoreboard", "│           ✘ TEST FAILED ✘              │", UVM_NONE)
+            `uvm_info("Scoreboard", "└─────────────────────────────────────────┘", UVM_NONE)
         end else begin
-            `uvm_info("SCB", "┌─────────────────────────────────────────┐", UVM_NONE)
-            `uvm_info("SCB", "│           ✓ TEST PASSED ✓               │", UVM_NONE)
-            `uvm_info("SCB", "└─────────────────────────────────────────┘", UVM_NONE)
+            `uvm_info("Scoreboard", "┌─────────────────────────────────────────┐", UVM_NONE)
+            `uvm_info("Scoreboard", "│           ✓ TEST PASSED ✓              │", UVM_NONE)
+            `uvm_info("Scoreboard", "└─────────────────────────────────────────┘", UVM_NONE)
         end
     endfunction : report_phase
 

@@ -21,7 +21,7 @@ class apb_fifo_base_test extends uvm_test;
     // End of Elaboration Phase
     function void end_of_elaboration_phase(uvm_phase phase);
         super.end_of_elaboration_phase(phase);
-        uvm_top.print_topology();
+        // uvm_top.print_topology();
     endfunction : end_of_elaboration_phase
 
     // Report Phase
@@ -31,17 +31,17 @@ class apb_fifo_base_test extends uvm_test;
         
         svr = uvm_report_server::get_server();
         
-        `uvm_info("TEST", "", UVM_NONE)
+        `uvm_info("BASE TEST", "", UVM_NONE)
         if (svr.get_severity_count(UVM_FATAL) + svr.get_severity_count(UVM_ERROR) > 0) begin
-            `uvm_info("TEST", "╔═══════════════════════════════════════════╗", UVM_NONE)
-            `uvm_info("TEST", "║              ✘ TEST FAILED ✘              ║", UVM_NONE)
-            `uvm_info("TEST", $sformatf("║  Errors: %3d    Fatals: %3d              ║", 
+            `uvm_info("BASE TEST", "╔═══════════════════════════════════════════╗", UVM_NONE)
+            `uvm_info("BASE TEST", "║              ✘ TEST FAILED ✘             ║", UVM_NONE)
+            `uvm_info("BASE TEST", $sformatf("║        Errors: %3d    Fatals: %3d         ║", 
                     svr.get_severity_count(UVM_ERROR), svr.get_severity_count(UVM_FATAL)), UVM_NONE)
-            `uvm_info("TEST", "╚═══════════════════════════════════════════╝", UVM_NONE)
+            `uvm_info("BASE TEST", "╚═══════════════════════════════════════════╝", UVM_NONE)
         end else begin
-            `uvm_info("TEST", "╔═══════════════════════════════════════════╗", UVM_NONE)
-            `uvm_info("TEST", "║              ✓ TEST PASSED ✓             ║", UVM_NONE)
-            `uvm_info("TEST", "╚═══════════════════════════════════════════╝", UVM_NONE)
+            `uvm_info("BASE TEST", "╔═══════════════════════════════════════════╗", UVM_NONE)
+            `uvm_info("BASE TEST", "║              ✓ TEST PASSED ✓             ║", UVM_NONE)
+            `uvm_info("BASE TEST", "╚═══════════════════════════════════════════╝", UVM_NONE)
         end
     endfunction : report_phase
 
