@@ -1,4 +1,7 @@
-interface apb_fifo_if(input logic PCLK, input logic PRESETn);
+interface apb_fifo_if(input logic PCLK);
+
+    // Reset signal - now internal to interface
+    logic PRESETn;
 
     // input to the DUT
     logic PSEL;
@@ -15,6 +18,7 @@ interface apb_fifo_if(input logic PCLK, input logic PRESETn);
     // Driver clocking block
     clocking drv_cb @(posedge PCLK);
         default input #1ns output #1ns;
+        output PRESETn;
         output PSEL;
         output PENABLE;
         output PWRITE;
@@ -28,6 +32,7 @@ interface apb_fifo_if(input logic PCLK, input logic PRESETn);
     // Monitor clocking block
     clocking mon_cb @(posedge PCLK);
         default input #1ns output #1ns;
+        input PRESETn;
         input PSEL;
         input PENABLE;
         input PWRITE;

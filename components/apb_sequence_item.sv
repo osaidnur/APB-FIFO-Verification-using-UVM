@@ -1,6 +1,7 @@
 class apb_sequence_item extends uvm_sequence_item;
 
     // inputs to DUT
+    rand bit presetn;  // Reset signal
     rand bit pwrite;
     rand bit [7:0] paddr;
     rand bit [31:0] pwdata;
@@ -44,8 +45,14 @@ class apb_sequence_item extends uvm_sequence_item;
     // pwrite dist {APB_WRITE := 60, APB_READ := 40};
     // }
 
+    // Constraint: Reset is typically high during normal operations
+    constraint reset_default_c {
+        presetn == 1'b1;
+    }
+
     // macros
     `uvm_object_utils_begin(apb_sequence_item)
+    `uvm_field_int(presetn, UVM_ALL_ON)
     `uvm_field_int(pwrite, UVM_ALL_ON)
     `uvm_field_int(paddr, UVM_ALL_ON)
     `uvm_field_int(pwdata, UVM_ALL_ON)
@@ -63,6 +70,7 @@ class apb_sequence_item extends uvm_sequence_item;
     function string convert2string();
         string s;
         s = $sformatf("\n========== APB Transaction ==========");
+        s = {s, $sformatf("\n  Reset     : %0d", presetn)};
         s = {s, $sformatf("\n  Operation : %s", pwrite.name())};
         s = {s, $sformatf("\n  Address   : 0x%02h", paddr)};
         if (pwrite == APB_WRITE)

@@ -14,9 +14,8 @@ import apb_fifo_pkg::*;
 
 module top_tb;
   
-    // Clock and Reset
+    // Clock only - reset is now internal to interface
     logic PCLK;
-    logic PRESETn;
     
     //--------------------------------------------------------------------------
     // Clock Generation - 100MHz
@@ -27,19 +26,9 @@ module top_tb;
     end
     
     //--------------------------------------------------------------------------
-    // Reset Generation
-    //--------------------------------------------------------------------------
-    initial begin
-        PRESETn = 0;
-        repeat(5) @(posedge PCLK);
-        PRESETn = 1;
-        `uvm_info("TOP", "Reset released", UVM_LOW)
-    end
-    
-    //--------------------------------------------------------------------------
     // Interface Instance
     //--------------------------------------------------------------------------
-    apb_fifo_if apb_if(PCLK, PRESETn);
+    apb_fifo_if apb_if(PCLK);
 
     //--------------------------------------------------------------------------
     // DUT Instance
@@ -49,7 +38,7 @@ module top_tb;
         .DEPTH(FIFO_DEPTH)
     ) dut (
         .PCLK    (PCLK),
-        .PRESETn (PRESETn),
+        .PRESETn (apb_if.PRESETn),
         .PSEL    (apb_if.PSEL),
         .PENABLE (apb_if.PENABLE),
         .PWRITE  (apb_if.PWRITE),
