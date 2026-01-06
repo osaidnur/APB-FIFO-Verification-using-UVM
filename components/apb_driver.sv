@@ -23,9 +23,10 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
 
 
     // --------------------------------------------------------------------------
-    // Reset Signals
+    // Drive Idle - Reset signals to default/idle state
     // --------------------------------------------------------------------------
     task drive_idle();
+        vif.drv_cb.PRESETn <= 1'b1;  // Keep reset deasserted during idle
         vif.drv_cb.PSEL <= 1'b0;
         vif.drv_cb.PENABLE <= 1'b0;
         vif.drv_cb.PWRITE <= 1'b0;
@@ -137,16 +138,25 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
 
     task drive(apb_sequence_item tr);
         
-        // Wait until reset is deasserted
-        while (vif.PRESETn !== 1'b1) begin
-            drive_idle();
-            @(posedge vif.PCLK);
+        // Drive reset signal from transaction
+        vif.drv_cb.PRESETn <= tr.presetn;
+        
+        // If reset is asserted, just drive reset and return
+        if (tr.presetn == 1'b0) begin
+            vif.drv_cb.PSEL <= 1'b0;
+            vif.drv_cb.PENABLE <= 1'b0;
+            vif.drv_cb.PWRITE <= 1'b0;
+            vif.drv_cb.PADDR <= 8'h0;
+            vif.drv_cb.PWDATA <= 32'h0;
+            @(vif.drv_cb);
+            return;
         end
 
         // -------------------------
         // SETUP cycle
         // -------------------------
         @(posedge vif.PCLK);
+        vif.drv_cb.PRESETn <= tr.presetn;
         vif.PSEL <= 1'b1;
         vif.PENABLE <= 1'b0;
         vif.PWRITE <= tr.pwrite;
