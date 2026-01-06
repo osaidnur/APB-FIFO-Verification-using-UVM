@@ -149,40 +149,40 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         // Wait until reset is deasserted
         while (vif.PRESETn !== 1'b1) begin
             drive_idle();
-            @(posedge vif.PCLK);
+            @(vif.drv_cb);
         end
 
         // -------------------------
         // SETUP cycle
         // -------------------------
-        @(posedge vif.PCLK);
-        vif.PSEL <= 1'b1;
-        vif.PENABLE <= 1'b0;
-        vif.PWRITE <= tr.pwrite;
-        vif.PADDR <= tr.paddr;
-        vif.PWDATA <= tr.pwdata;
+        @(vif.drv_cb);
+        vif.drv_cb.PSEL <= 1'b1;
+        vif.drv_cb.PENABLE <= 1'b0;
+        vif.drv_cb.PWRITE <= tr.pwrite;
+        vif.drv_cb.PADDR <= tr.paddr;
+        vif.drv_cb.PWDATA <= tr.pwdata;
 
         // -------------------------
         // ACCESS cycle(s)
         // -------------------------
-        @(posedge vif.PCLK);
-        vif.PENABLE <= 1'b1;
+        @(vif.drv_cb);
+        vif.drv_cb.PENABLE <= 1'b1;
 
         // Wait states support: keep signals stable until PREADY=1
-        while (vif.PREADY !== 1'b1) begin
-            @(posedge vif.PCLK);
+        while (vif.drv_cb.PREADY !== 1'b1) begin
+            @(vif.drv_cb);
         end
 
         // Transfer completes on the cycle with PREADY=1 while PSEL&PENABLE=1
-        tr.pslverr = vif.PSLVERR;
+        tr.pslverr = vif.drv_cb.PSLVERR;
         if (!tr.pwrite) begin
-            tr.prdata = vif.PRDATA;
+            tr.prdata = vif.drv_cb.PRDATA;
         end
 
         // -------------------------
         // Return to IDLE
         // -------------------------
-        @(posedge vif.PCLK);
+        @(vif.drv_cb);
         drive_idle();
     endtask
 
