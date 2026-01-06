@@ -12,7 +12,7 @@ class apb_sequence_item extends uvm_sequence_item;
     bit [31:0] prdata;
     bit pslverr;
 
-    // Valid address constraint - only valid register addresses
+    // Valid address constraint
     constraint valid_addr_c {
         paddr inside {CTRL_OFFSET, THRESH_OFFSET, STATUS_OFFSET, DATA_OFFSET};
     }
@@ -144,6 +144,9 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         end
     endtask : run_phase
 
+    // --------------------------------------------------------------------------
+    // Drive APB Transaction
+    // --------------------------------------------------------------------------
     task drive(apb_sequence_item tr);
         
         // Wait until reset is deasserted
@@ -152,9 +155,7 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
             @(vif.drv_cb);
         end
 
-        // -------------------------
         // SETUP cycle
-        // -------------------------
         @(vif.drv_cb);
         vif.drv_cb.PSEL <= 1'b1;
         vif.drv_cb.PENABLE <= 1'b0;
@@ -162,26 +163,22 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         vif.drv_cb.PADDR <= tr.paddr;
         vif.drv_cb.PWDATA <= tr.pwdata;
 
-        // -------------------------
-        // ACCESS cycle(s)
-        // -------------------------
+        // ACCESS cycle
         @(vif.drv_cb);
         vif.drv_cb.PENABLE <= 1'b1;
 
-        // Wait states support: keep signals stable until PREADY=1
+        // keep signals stable until PREADY=1
         while (vif.drv_cb.PREADY !== 1'b1) begin
             @(vif.drv_cb);
         end
 
-        // Transfer completes on the cycle with PREADY=1 while PSEL&PENABLE=1
+        // The transfer is completed here, so take the outputs
         tr.pslverr = vif.drv_cb.PSLVERR;
         if (!tr.pwrite) begin
             tr.prdata = vif.drv_cb.PRDATA;
         end
 
-        // -------------------------
         // Return to IDLE
-        // -------------------------
         @(vif.drv_cb);
         drive_idle();
     endtask
@@ -230,7 +227,7 @@ class apb_monitor extends uvm_monitor;
         @(posedge vif.PRESETn);
 
         forever begin
-            @(posedge vif.PCLK);
+            @(posedge vif.mon_cb);
             // APB transfer completes when PSEL=1, PENABLE=1, PREADY=1
             if (vif.PSEL && vif.PENABLE && vif.PREADY) begin
                 item = apb_sequence_item::type_id::create("item", this);
@@ -443,6 +440,13 @@ class apb_fifo_ref_model;
     endfunction : write_ctrl
 
     //------------------------------------------------------
+    // Read CTRL register
+    //------------------------------------------------------
+    function bit [31:0] read_ctrl();
+        return {29'h0, drop_on_full, clr, en};
+    endfunction : read_ctrl
+
+    //------------------------------------------------------
     // Write THRESH register
     //------------------------------------------------------
     function void write_thresh(bit [31:0] data);
@@ -450,13 +454,6 @@ class apb_fifo_ref_model;
         almost_empty_th = data[15:8];
         update_flags();
     endfunction : write_thresh
-
-    //------------------------------------------------------
-    // Read CTRL register
-    //------------------------------------------------------
-    function bit [31:0] read_ctrl();
-        return {29'h0, drop_on_full, clr, en};
-    endfunction : read_ctrl
 
     //------------------------------------------------------
     // Read THRESH register
@@ -521,11 +518,11 @@ class apb_fifo_ref_model;
     // Debug: Get FIFO contents as string
     //--------------------------------------------------------------------------
     function string print_status();
-    string s;
-    s = $sformatf("RefModel State: EN=%0d, Count=%0d/%0d, Empty=%0d, Full=%0d, AF=%0d, AE=%0d, OVF=%0d, UNF=%0d",
-                    en, count, DEPTH, empty_flag, full_flag, 
-                    almost_full_flag, almost_empty_flag, overflow_flag, underflow_flag);
-    return s;
+        string s;
+        s = $sformatf("RefModel State: EN=%0d, Count=%0d/%0d, Empty=%0d, Full=%0d, AF=%0d, AE=%0d, OVF=%0d, UNF=%0d",
+                        en, count, DEPTH, empty_flag, full_flag, 
+                        almost_full_flag, almost_empty_flag, overflow_flag, underflow_flag);
+        return s;
     endfunction : print_status
 
 endclass : apb_fifo_ref_model
@@ -570,7 +567,7 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
     endfunction : build_phase
 
     //--------------------------------------------------------------------------
-    // Write Implementation - No Run Phase Needed
+    // Write function 
     //--------------------------------------------------------------------------
     function void write(apb_sequence_item item);
         bit [31:0] expected;
@@ -665,7 +662,7 @@ endclass : apb_fifo_scoreboard
 // #############################################################################################
 
 // ==============================================================================
-// Coverage Subscriber (Simplified for EDA Playground)
+// Coverage Subscriber
 // ==============================================================================
 class apb_subscriber extends uvm_subscriber #(apb_sequence_item);
     
@@ -726,7 +723,7 @@ class apb_fifo_env extends uvm_env;
         // Create scoreboard
         scoreboard = apb_fifo_scoreboard::type_id::create("scoreboard", this);
 
-        // Create coverage collector
+        // Create subscriber (coverage collector)
         subscriber = apb_subscriber::type_id::create("subscriber", this);
     endfunction : build_phase
 
@@ -739,7 +736,7 @@ class apb_fifo_env extends uvm_env;
         // Connect monitor to scoreboard
         agent.monitor.ap.connect(scoreboard.analysis_export);
 
-        // Connect monitor to coverage
+        // Connect monitor to subscriber (coverage collector)
         agent.monitor.ap.connect(subscriber.analysis_export);
     endfunction : connect_phase
 
