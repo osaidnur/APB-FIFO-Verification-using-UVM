@@ -4,7 +4,7 @@
 interface apb_fifo_if(input logic PCLK);
 
     // Reset signal
-    input logic PRESETn;
+    logic PRESETn;
 
     // input to the DUT
     logic PSEL;

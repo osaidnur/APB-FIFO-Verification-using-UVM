@@ -1,5 +1,5 @@
 // ==============================================================================
-// Base Sequence - Provides utility tasks for register access
+// Base Sequence
 // ==============================================================================
 class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
 

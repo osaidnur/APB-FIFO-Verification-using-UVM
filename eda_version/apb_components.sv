@@ -153,7 +153,7 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
             `uvm_info("Driver", $sformatf("Driving %s transaction: addr=0x%02h, pwdata=0x%0h", item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata),
                       UVM_MEDIUM)
             drive(item);
-            seq_item_port.item_done();
+            seq_item_port.item_done(item);
         end
     endtask : run_phase
 
@@ -162,29 +162,22 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
     // --------------------------------------------------------------------------
     task drive(apb_sequence_item tr);
         
-        // // Wait until reset is deasserted
-        // while (vif.PRESETn !== 1'b1) begin
-        //     drive_idle();
-        //     @(vif.drv_cb);
-        // end
-
-        // Drive reset signal from transaction
-        vif.drv_cb.PRESETn <= tr.presetn;
-        
-        // If reset is asserted, just drive reset and return
+        // If reset is asserted, just drive reset and idle signals
         if (tr.presetn == 1'b0) begin
+            @(vif.drv_cb);
+            vif.drv_cb.PRESETn <= 1'b0;
             vif.drv_cb.PSEL <= 1'b0;
             vif.drv_cb.PENABLE <= 1'b0;
             vif.drv_cb.PWRITE <= 1'b0;
             vif.drv_cb.PADDR <= 8'h0;
             vif.drv_cb.PWDATA <= 32'h0;
-            @(vif.drv_cb);
             return;
         end
 
+        // Normal operation - ensure reset is deasserted
         // SETUP cycle
         @(vif.drv_cb);
-        vif.drv_cb.PRESETn <= tr.presetn;
+        vif.drv_cb.PRESETn <= 1'b1;
         vif.drv_cb.PSEL <= 1'b1;
         vif.drv_cb.PENABLE <= 1'b0;
         vif.drv_cb.PWRITE <= tr.pwrite;
@@ -251,20 +244,30 @@ class apb_monitor extends uvm_monitor;
     task run_phase(uvm_phase phase);
         apb_sequence_item item;
 
-        // Wait for reset to complete
-        @(posedge vif.PRESETn);
-
         forever begin
-            @(vif.mon_cb);
+            @(posedge vif.PCLK);
+            
+            // Debug: Log what we see every clock - use direct signals, not clocking block
+            `uvm_info("Monitor", $sformatf("@ %0t: PRESETn=%b PSEL=%b PENABLE=%b PREADY=%b PWRITE=%b PADDR=0x%02h", 
+                      $time, vif.PRESETn, vif.PSEL, vif.PENABLE, vif.PREADY, 
+                      vif.PWRITE, vif.PADDR), UVM_HIGH)
+            
+            // Skip monitoring during reset
+            if (vif.PRESETn !== 1'b1) begin
+                continue;
+            end
+            
             // APB transfer completes when PSEL=1, PENABLE=1, PREADY=1
             if (vif.PSEL && vif.PENABLE && vif.PREADY) begin
                 item = apb_sequence_item::type_id::create("item", this);
-                `uvm_info("Monitor", $sformatf("Monitoring %s transaction: addr=0x%02h, pwdata=0x%0h", vif.PWRITE ? "WRITE" : "READ", vif.PADDR, vif.PWDATA), UVM_MEDIUM)
+                item.presetn = vif.PRESETn;
                 item.paddr   = vif.PADDR;
                 item.pwrite  = vif.PWRITE;
                 item.pwdata  = vif.PWDATA;
                 item.prdata  = vif.PRDATA;
                 item.pslverr = vif.PSLVERR;
+                `uvm_info("Monitor", $sformatf("Monitoring %s transaction: addr=0x%02h, pwdata=0x%08h, prdata=0x%08h", 
+                          item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata, item.prdata), UVM_MEDIUM)
                 ap.write(item);
             end
         end
@@ -600,6 +603,13 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
         bit [31:0] expected;
         bit [7:0] expected_data;
         bit success;
+        
+        // Handle reset - reset reference model when PRESETn is low
+        if (item.presetn == 1'b0) begin
+            `uvm_info("Scoreboard", "Reset detected - resetting reference model", UVM_MEDIUM)
+            ref_model.reset();
+            return;  // Don't process transaction during reset
+        end
         
         total_transactions++;
         
