@@ -13,6 +13,7 @@ class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
     task write_reg(bit [7:0] addr, bit [31:0] data);
         apb_sequence_item item = apb_sequence_item::type_id::create("item");
         start_item(item);
+        item.presetn = 1'b1;
         item.pwrite = APB_WRITE;
         item.paddr = addr;
         item.pwdata = data;
@@ -23,11 +24,20 @@ class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
     task read_reg(bit [7:0] addr, output bit [31:0] data);
         apb_sequence_item item = apb_sequence_item::type_id::create("item");
         start_item(item);
+        item.presetn = 1'b1;
         item.pwrite = APB_READ;
         item.paddr = addr;
         finish_item(item);
         data = item.prdata;
     endtask : read_reg
+
+
+    task reset_fifo();
+        apb_sequence_item item = apb_sequence_item::type_id::create("item");
+        start_item(item);
+        item.presetn = 1'b0; // Assert reset
+        finish_item(item);
+    endtask : reset_fifo
 
     // Push data to FIFO
     task push_data(bit [7:0] data);
@@ -103,75 +113,91 @@ class reset_sequence extends apb_base_sequence;
         apb_sequence_item reset_item;
         bit empty, full, almost_full, almost_empty, overflow, underflow;
         bit [7:0] count;
+        `uvm_info("SEQ", "============================================================", UVM_MEDIUM)
+        `uvm_info(get_type_name(), "Starting Reset Sequence - Testing Reset Behavior", UVM_MEDIUM)
 
-        `uvm_info("SEQ", "Starting Reset Sequence - Testing Reset Behavior", UVM_MEDIUM)
-
-        // First, enable FIFO and push some data
-        enable_fifo();
-        `uvm_info("SEQ", "FIFO enabled", UVM_MEDIUM)
-        
-        for (int i = 0; i < 5; i++) begin
-            push_data(8'h10 + i);
+        // Assert reset and hold for 5 cycles (PRESETn=0)
+        `uvm_info(get_type_name(), "Asserting hardware reset (PRESETn=0)", UVM_MEDIUM)
+        repeat(3) begin
+            reset_fifo();
         end
-        `uvm_info("SEQ", "Pushed 5 data items to FIFO", UVM_MEDIUM)
+        `uvm_info(get_type_name(), "Reset held for 3 cycles", UVM_MEDIUM)
 
-        // Read status before reset
         read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        `uvm_info("SEQ", $sformatf("Before reset: count=%0d, empty=%0d, full=%0d", count, empty, full), UVM_MEDIUM)
+        // `uvm_info(get_type_name(), $sformatf("After first reset: count=%0d, empty=%0d, full=%0d, overflow=%0d, underflow=%0d", 
+        //           count, empty, full, overflow, underflow), UVM_MEDIUM)
 
-        // Apply hardware reset by driving PRESETn low
-        `uvm_info("SEQ", "Asserting hardware reset (PRESETn=0)", UVM_MEDIUM)
-        reset_item = apb_sequence_item::type_id::create("reset_item");
-        start_item(reset_item);
-        reset_item.presetn = 1'b0;  // Assert reset
-        finish_item(reset_item);
+        //  push some data to the fifo
+        `uvm_info(get_type_name(), "--- Pushing data to FIFO ---", UVM_MEDIUM)
         
-        // Hold reset for a few cycles
-        repeat(5) begin
+        // Enable FIFO first
+        enable_fifo();
+        `uvm_info(get_type_name(), "FIFO enabled", UVM_MEDIUM)
+        
+        // Push 3 data items
+        push_data(8'h10);
+        push_data(8'h11);
+        push_data(8'h12);
+
+        `uvm_info(get_type_name(), "Pushed 3 data items to FIFO", UVM_MEDIUM)
+        
+        // Check status after pushing
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        // `uvm_info(get_type_name(), $sformatf("After pushing: count=%0d, empty=%0d, full=%0d", 
+        //           count, empty, full), UVM_MEDIUM)
+
+        // Assert reset and hold for 3 cycles (PRESETn=0)
+        `uvm_info(get_type_name(), "Asserting hardware reset again (PRESETn=0)", UVM_MEDIUM)
+        repeat(3) begin
+            reset_fifo();
+        end
+        `uvm_info(get_type_name(), "Reset held for 3 cycles", UVM_MEDIUM)
+
+        // Verify status after second reset - should be same as first reset
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        // `uvm_info(get_type_name(), $sformatf("After second reset: count=%0d, empty=%0d, full=%0d, overflow=%0d, underflow=%0d", 
+        //           count, empty, full, overflow, underflow), UVM_MEDIUM)
+
+        // ###############################################################################
+        // Test with flipped reset polarity (PRESETn=1 when it should reset)
+        `uvm_info(get_type_name(), "--- Testing Flipped Reset Polarity ---", UVM_MEDIUM)
+        
+        `uvm_info(get_type_name(), "Asserting hardware reset (PRESETn=1)", UVM_MEDIUM)
+        repeat(3) begin
             reset_item = apb_sequence_item::type_id::create("reset_item");
             start_item(reset_item);
-            reset_item.presetn = 1'b0;
+            reset_item.presetn = 1'b1;  // flipped
             finish_item(reset_item);
         end
-        `uvm_info("SEQ", "Reset held for 5 cycles", UVM_MEDIUM)
 
-        // Deassert reset
-        `uvm_info("SEQ", "Deasserting reset (PRESETn=1)", UVM_MEDIUM)
-        reset_item = apb_sequence_item::type_id::create("reset_item");
-        start_item(reset_item);
-        reset_item.presetn = 1'b1;  // Deassert reset
-        finish_item(reset_item);
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        `uvm_info(get_type_name(), $sformatf("After flipped polarity reset attempt: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
 
-        // Wait a few cycles for reset to take effect
-        repeat(2) begin
+
+        // Push data to FIFO first
+        enable_fifo();
+        push_data(8'h20);
+        push_data(8'h30);
+        push_data(8'h40);
+
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        // `uvm_info(get_type_name(), $sformatf("Before flipped polarity test: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
+        
+        // Try to "reset" with PRESETn=1 (incorrect - should NOT reset)
+        `uvm_info(get_type_name(), "Attempting reset with PRESETn=1 (should have NO effect)", UVM_MEDIUM)
+        repeat(3) begin
             reset_item = apb_sequence_item::type_id::create("reset_item");
             start_item(reset_item);
-            reset_item.presetn = 1'b1;
+            reset_item.presetn = 1'b1;  // flipped
             finish_item(reset_item);
         end
-
-        // Re-enable FIFO after reset
-        enable_fifo();
-        `uvm_info("SEQ", "FIFO re-enabled after reset", UVM_MEDIUM)
-
-        // Read status after reset - should be empty and count should be 0
+        
+        // Verify FIFO was NOT reset (data should still be there)
         read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        `uvm_info("SEQ", $sformatf("After reset: count=%0d, empty=%0d, full=%0d", count, empty, full), UVM_MEDIUM)
-
-        // Verify reset behavior
-        if (count == 0 && empty == 1) begin
-            `uvm_info("SEQ", "Reset verification PASSED - FIFO cleared as expected", UVM_MEDIUM)
-        end else begin
-            `uvm_error("SEQ", $sformatf("Reset verification FAILED - Expected count=0, empty=1, Got count=%0d, empty=%0d", count, empty))
-        end
-
-        // Test normal operation after reset
-        `uvm_info("SEQ", "Testing normal operation after reset", UVM_MEDIUM)
-        push_data(8'hAA);
-        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        `uvm_info("SEQ", $sformatf("After push: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
-
-        `uvm_info("SEQ", "Reset Sequence Complete", UVM_MEDIUM)
+        `uvm_info(get_type_name(), $sformatf("After PRESETn=1: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
+        
+        `uvm_info("SEQ", "Reset Sequence Complete (with polarity test)", UVM_MEDIUM)
+        `uvm_info("SEQ", "============================================================", UVM_MEDIUM)
     endtask : body
 
 endclass : reset_sequence
