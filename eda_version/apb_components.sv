@@ -131,12 +131,12 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
     // Reset Signals
     // --------------------------------------------------------------------------
     task drive_idle();
-        vif.drv_cb.PRESETn <= 1'b1;
-        vif.drv_cb.PSEL <= 1'b0;
-        vif.drv_cb.PENABLE <= 1'b0;
-        vif.drv_cb.PWRITE <= 1'b0;
-        vif.drv_cb.PADDR <= 8'h0;
-        vif.drv_cb.PWDATA <= 32'h0;
+        vif.PRESETn <= 1'b1;
+        vif.PSEL <= 1'b0;
+        vif.PENABLE <= 1'b0;
+        vif.PWRITE <= 1'b0;
+        vif.PADDR <= 8'h0;
+        vif.PWDATA <= 32'h0;
     endtask : drive_idle
 
     // --------------------------------------------------------------------------
@@ -164,43 +164,42 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         
         // If reset is asserted, just drive reset and idle signals
         if (tr.presetn == 1'b0) begin
-            @(vif.drv_cb);
-            vif.drv_cb.PRESETn <= 1'b0;
-            vif.drv_cb.PSEL <= 1'b0;
-            vif.drv_cb.PENABLE <= 1'b0;
-            vif.drv_cb.PWRITE <= 1'b0;
-            vif.drv_cb.PADDR <= 8'h0;
-            vif.drv_cb.PWDATA <= 32'h0;
+            @(posedge vif.PCLK);
+            vif.PRESETn <= 1'b0;
+            vif.PSEL <= 1'b0;
+            vif.PENABLE <= 1'b0;
+            vif.PWRITE <= 1'b0;
+            vif.PADDR <= 8'h0;
+            vif.PWDATA <= 32'h0;
             return;
         end
 
         // Normal operation - ensure reset is deasserted
         // SETUP cycle
-        @(vif.drv_cb);
-        vif.drv_cb.PRESETn <= 1'b1;
-        vif.drv_cb.PSEL <= 1'b1;
-        vif.drv_cb.PENABLE <= 1'b0;
-        vif.drv_cb.PWRITE <= tr.pwrite;
-        vif.drv_cb.PADDR <= tr.paddr;
-        vif.drv_cb.PWDATA <= tr.pwdata;
+        @(posedge vif.PCLK);
+        vif.PRESETn <= 1'b1;
+        vif.PSEL <= 1'b1;
+        vif.PENABLE <= 1'b0;
+        vif.PWRITE <= tr.pwrite;
+        vif.PADDR <= tr.paddr;
+        vif.PWDATA <= tr.pwdata;
 
         // ACCESS cycle
-        @(vif.drv_cb);
-        vif.drv_cb.PENABLE <= 1'b1;
-
+        @(posedge vif.PCLK);
+        vif.PENABLE <= 1'b1;
         // keep signals stable until PREADY=1
-        while (vif.drv_cb.PREADY !== 1'b1) begin
-            @(vif.drv_cb);
+        while (vif.PREADY !== 1'b1) begin
+            @(posedge vif.PCLK);
         end
 
         // The transfer is completed here, so take the outputs
-        tr.pslverr = vif.drv_cb.PSLVERR;
+        tr.pslverr = vif.PSLVERR;
         if (!tr.pwrite) begin
-            tr.prdata = vif.drv_cb.PRDATA;
+            tr.prdata = vif.PRDATA;
         end
 
         // Return to IDLE
-        @(vif.drv_cb);
+        @(posedge vif.PCLK);
         drive_idle();
     endtask
 
@@ -246,6 +245,7 @@ class apb_monitor extends uvm_monitor;
 
         forever begin
             @(posedge vif.PCLK);
+            #0; // Wait for NBA region to settle (driver's non-blocking assignments)
             
             // Debug: Log what we see every clock - use direct signals, not clocking block
             `uvm_info("Monitor", $sformatf("@ %0t: PRESETn=%b PSEL=%b PENABLE=%b PREADY=%b PWRITE=%b PADDR=0x%02h", 
@@ -658,7 +658,30 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
     function void compare(string reg_name, bit [31:0] expected, bit [31:0] actual);
         if (actual !== expected) begin
             fail_count++;
+            `uvm_error("Scoreboard", $sformatf("============================================================"))
             `uvm_error("Scoreboard", $sformatf("%s Mismatch: Expected=0x%08h, Actual=0x%08h", reg_name, expected, actual))
+            
+            // Detailed breakdown for different register types
+            if (reg_name == "STATUS") begin
+                `uvm_error("Scoreboard", $sformatf("  STATUS Details:"))
+                `uvm_error("Scoreboard", $sformatf("    Empty:       Exp=%0b Act=%0b %s", expected[0], actual[0], (expected[0]!=actual[0])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    Full:        Exp=%0b Act=%0b %s", expected[1], actual[1], (expected[1]!=actual[1])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    AlmostFull:  Exp=%0b Act=%0b %s", expected[2], actual[2], (expected[2]!=actual[2])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    AlmostEmpty: Exp=%0b Act=%0b %s", expected[3], actual[3], (expected[3]!=actual[3])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    Overflow:    Exp=%0b Act=%0b %s", expected[4], actual[4], (expected[4]!=actual[4])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    Underflow:   Exp=%0b Act=%0b %s", expected[5], actual[5], (expected[5]!=actual[5])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    Count:       Exp=%0d Act=%0d %s", expected[13:6], actual[13:6], (expected[13:6]!=actual[13:6])?"MISMATCH":""))
+            end else if (reg_name == "CTRL") begin
+                `uvm_error("Scoreboard", $sformatf("  CTRL Details:"))
+                `uvm_error("Scoreboard", $sformatf("    Enable:      Exp=%0b Act=%0b %s", expected[0], actual[0], (expected[0]!=actual[0])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    Clear:       Exp=%0b Act=%0b %s", expected[1], actual[1], (expected[1]!=actual[1])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    DropOnFull:  Exp=%0b Act=%0b %s", expected[2], actual[2], (expected[2]!=actual[2])?"MISMATCH":""))
+            end else if (reg_name == "THRESH") begin
+                `uvm_error("Scoreboard", $sformatf("  THRESH Details:"))
+                `uvm_error("Scoreboard", $sformatf("    AlmostFullTh:  Exp=%0d Act=%0d %s", expected[7:0], actual[7:0], (expected[7:0]!=actual[7:0])?"MISMATCH":""))
+                `uvm_error("Scoreboard", $sformatf("    AlmostEmptyTh: Exp=%0d Act=%0d %s", expected[15:8], actual[15:8], (expected[15:8]!=actual[15:8])?"MISMATCH":""))
+            end
+            `uvm_error("Scoreboard", $sformatf("============================================================"))
         end else begin
             pass_count++;
             `uvm_info("Scoreboard", $sformatf("%s Match: 0x%08h", reg_name, actual), UVM_MEDIUM)
