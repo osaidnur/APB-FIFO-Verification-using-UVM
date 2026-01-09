@@ -387,7 +387,7 @@ class apb_fifo_ref_model;
         count = fifo_mem.size();
         empty_flag = (count == 0);
         full_flag = (count >= DEPTH);
-        almost_full_flag = (count >= almost_full_th);
+        almost_full_flag = (count > almost_full_th);
         almost_empty_flag = (count <= almost_empty_th);
     endfunction : update_flags
 
