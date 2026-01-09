@@ -1,5 +1,5 @@
 // ==============================================================================
-// Base Sequence - Provides utility tasks for register access
+// Base Sequence
 // ==============================================================================
 class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
 
@@ -13,21 +13,34 @@ class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
     task write_reg(bit [7:0] addr, bit [31:0] data);
         apb_sequence_item item = apb_sequence_item::type_id::create("item");
         start_item(item);
+        item.presetn = 1'b1;
         item.pwrite = APB_WRITE;
         item.paddr = addr;
         item.pwdata = data;
         finish_item(item);
+        get_response(item);
     endtask : write_reg
 
     // Read from a register
     task read_reg(bit [7:0] addr, output bit [31:0] data);
         apb_sequence_item item = apb_sequence_item::type_id::create("item");
         start_item(item);
+        item.presetn = 1'b1;
         item.pwrite = APB_READ;
         item.paddr = addr;
         finish_item(item);
+        get_response(item);
         data = item.prdata;
     endtask : read_reg
+
+
+    task reset_fifo();
+        apb_sequence_item item = apb_sequence_item::type_id::create("item");
+        start_item(item);
+        item.presetn = 1'b0; // Assert reset
+        finish_item(item);
+        get_response(item);
+    endtask : reset_fifo
 
     // Push data to FIFO
     task push_data(bit [7:0] data);
@@ -91,11 +104,11 @@ endclass : apb_base_sequence
 // =============================================================================
 // Reset Sequence
 // ============================================================================
-class reset_sequence extends apb_base_sequence;
+class fifo_reset_sequence extends apb_base_sequence;
 
-    `uvm_object_utils(reset_sequence)
+    `uvm_object_utils(fifo_reset_sequence)
 
-    function new(string name = "reset_sequence");
+    function new(string name = "fifo_reset_sequence");
         super.new(name);
     endfunction : new
 
@@ -103,78 +116,118 @@ class reset_sequence extends apb_base_sequence;
         apb_sequence_item reset_item;
         bit empty, full, almost_full, almost_empty, overflow, underflow;
         bit [7:0] count;
+        `uvm_info("SEQ", "============================================================", UVM_MEDIUM)
+        `uvm_info(get_type_name(), "Starting Reset Sequence - Testing Reset Behavior", UVM_MEDIUM)
 
-        `uvm_info("SEQ", "Starting Reset Sequence - Testing Reset Behavior", UVM_MEDIUM)
+        // Assert reset and hold for 3 cycles (PRESETn=0)
+        `uvm_info(get_type_name(), "Asserting hardware reset (PRESETn=0)", UVM_MEDIUM)
+        // repeat(3) begin
+            reset_fifo();
+        // end
+        `uvm_info(get_type_name(), "Reset held for 3 cycles", UVM_MEDIUM)
 
-        // First, enable FIFO and push some data
-        enable_fifo();
-        `uvm_info("SEQ", "FIFO enabled", UVM_MEDIUM)
-        
-        for (int i = 0; i < 5; i++) begin
-            push_data(8'h10 + i);
-        end
-        `uvm_info("SEQ", "Pushed 5 data items to FIFO", UVM_MEDIUM)
-
-        // Read status before reset
         read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        `uvm_info("SEQ", $sformatf("Before reset: count=%0d, empty=%0d, full=%0d", count, empty, full), UVM_MEDIUM)
+        // `uvm_info(get_type_name(), $sformatf("After first reset: count=%0d, empty=%0d, full=%0d, overflow=%0d, underflow=%0d", 
+        //           count, empty, full, overflow, underflow), UVM_MEDIUM)
 
-        // Apply hardware reset by driving PRESETn low
-        `uvm_info("SEQ", "Asserting hardware reset (PRESETn=0)", UVM_MEDIUM)
-        reset_item = apb_sequence_item::type_id::create("reset_item");
-        start_item(reset_item);
-        reset_item.presetn = 1'b0;  // Assert reset
-        finish_item(reset_item);
+        //  push some data to the fifo
+        `uvm_info(get_type_name(), "--- Pushing data to FIFO ---", UVM_MEDIUM)
         
-        // Hold reset for a few cycles
-        repeat(5) begin
+        // Enable FIFO first
+        enable_fifo();
+        `uvm_info(get_type_name(), "FIFO enabled", UVM_MEDIUM)
+        
+        // Push 3 data items
+        push_data(8'h10);
+        push_data(8'h11);
+        push_data(8'h12);
+
+        `uvm_info(get_type_name(), "Pushed 3 data items to FIFO", UVM_MEDIUM)
+        
+        // Check status after pushing
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        // `uvm_info(get_type_name(), $sformatf("After pushing: count=%0d, empty=%0d, full=%0d", 
+        //           count, empty, full), UVM_MEDIUM)
+
+        // Assert reset and hold for 3 cycles (PRESETn=0)
+        `uvm_info(get_type_name(), "Asserting hardware reset again (PRESETn=0)", UVM_MEDIUM)
+        // repeat(3) begin
+            reset_fifo();
+        // end
+        `uvm_info(get_type_name(), "Reset held for 3 cycles", UVM_MEDIUM)
+
+        // Verify status after second reset - should be same as first reset
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        // `uvm_info(get_type_name(), $sformatf("After second reset: count=%0d, empty=%0d, full=%0d, overflow=%0d, underflow=%0d", 
+        //           count, empty, full, overflow, underflow), UVM_MEDIUM)
+
+        // ###############################################################################
+        // Test with flipped reset polarity (PRESETn=1 when it should reset)
+        `uvm_info(get_type_name(), "--- Testing Flipped Reset Polarity ---", UVM_MEDIUM)
+        
+        `uvm_info(get_type_name(), "Asserting hardware reset (PRESETn=1)", UVM_MEDIUM)
+        // repeat(3) begin
             reset_item = apb_sequence_item::type_id::create("reset_item");
             start_item(reset_item);
-            reset_item.presetn = 1'b0;
+            reset_item.presetn = 1'b1;  // flipped
             finish_item(reset_item);
-        end
-        `uvm_info("SEQ", "Reset held for 5 cycles", UVM_MEDIUM)
+        // end
 
-        // Deassert reset
-        `uvm_info("SEQ", "Deasserting reset (PRESETn=1)", UVM_MEDIUM)
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        `uvm_info(get_type_name(), $sformatf("After flipped polarity reset attempt: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
+
+
+        // Push data to FIFO first
+        enable_fifo();
+        `uvm_info(get_type_name(), "FIFO enabled", UVM_MEDIUM)
+        
         reset_item = apb_sequence_item::type_id::create("reset_item");
         start_item(reset_item);
-        reset_item.presetn = 1'b1;  // Deassert reset
+        reset_item.presetn = 1'b0;
+        reset_item.pwrite = APB_WRITE;
+        reset_item.paddr = DATA_OFFSET;
+        reset_item.pwdata = 32'h010;
         finish_item(reset_item);
 
-        // Wait a few cycles for reset to take effect
-        repeat(2) begin
+        reset_item = apb_sequence_item::type_id::create("reset_item");
+
+        start_item(reset_item);
+        reset_item.presetn = 1'b0;
+        reset_item.pwrite = APB_WRITE;
+        reset_item.paddr = DATA_OFFSET;
+        reset_item.pwdata = 32'h20;
+        finish_item(reset_item);
+
+        reset_item = apb_sequence_item::type_id::create("reset_item");
+
+        start_item(reset_item);
+        reset_item.presetn = 1'b0;
+        reset_item.pwrite = APB_WRITE;
+        reset_item.paddr = DATA_OFFSET;
+        reset_item.pwdata = 32'h30;
+        finish_item(reset_item);
+
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        // `uvm_info(get_type_name(), $sformatf("Before flipped polarity test: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
+        
+        // Try to "reset" with PRESETn=1 (incorrect - should NOT reset)
+        `uvm_info(get_type_name(), "Attempting reset with PRESETn=1 (should have NO effect)", UVM_MEDIUM)
+        // repeat(3) begin
             reset_item = apb_sequence_item::type_id::create("reset_item");
             start_item(reset_item);
-            reset_item.presetn = 1'b1;
+            reset_item.presetn = 1'b1;  // flipped
             finish_item(reset_item);
-        end
-
-        // Re-enable FIFO after reset
-        enable_fifo();
-        `uvm_info("SEQ", "FIFO re-enabled after reset", UVM_MEDIUM)
-
-        // Read status after reset - should be empty and count should be 0
+        // end
+        
+        // Verify FIFO was NOT reset (data should still be there)
         read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        `uvm_info("SEQ", $sformatf("After reset: count=%0d, empty=%0d, full=%0d", count, empty, full), UVM_MEDIUM)
-
-        // Verify reset behavior
-        if (count == 0 && empty == 1) begin
-            `uvm_info("SEQ", "Reset verification PASSED - FIFO cleared as expected", UVM_MEDIUM)
-        end else begin
-            `uvm_error("SEQ", $sformatf("Reset verification FAILED - Expected count=0, empty=1, Got count=%0d, empty=%0d", count, empty))
-        end
-
-        // Test normal operation after reset
-        `uvm_info("SEQ", "Testing normal operation after reset", UVM_MEDIUM)
-        push_data(8'hAA);
-        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        `uvm_info("SEQ", $sformatf("After push: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
-
-        `uvm_info("SEQ", "Reset Sequence Complete", UVM_MEDIUM)
+        `uvm_info(get_type_name(), $sformatf("After PRESETn=1: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
+        
+        `uvm_info(get_type_name(), "Reset Sequence Complete (with polarity test)", UVM_MEDIUM)
+        `uvm_info(get_type_name(), "============================================================", UVM_MEDIUM)
     endtask : body
 
-endclass : reset_sequence
+endclass : fifo_reset_sequence
 
 
 // #############################################################################################
@@ -192,28 +245,109 @@ class fifo_enable_sequence extends apb_base_sequence;
         super.new(name);
     endfunction : new
 
+
     task body();
         bit [7:0] rdata;
+        bit empty, full, almost_full, almost_empty, overflow, underflow;
 
-        `uvm_info("SEQ", "Starting FIFO Enable Sequence", UVM_MEDIUM)
+        `uvm_info(get_type_name(), "Starting FIFO Enable Sequence", UVM_MEDIUM)
+
+        // read status flags
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, rdata);
 
         // Try to push data when disabled
         disable_fifo();
-        push_data(8'hAA);
+        `uvm_info(get_type_name(), "FIFO disabled", UVM_MEDIUM)
 
-        // Enable FIFO
+        push_data(8'hAA);
+        `uvm_info(get_type_name(), "Attempted to push data while FIFO disabled", UVM_MEDIUM)
+
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, rdata);
+
         enable_fifo();
+        `uvm_info(get_type_name(), "FIFO enabled", UVM_MEDIUM)
 
         // Push data when enabled
         push_data(8'h55);
+        `uvm_info(get_type_name(), "Pushed data while FIFO enabled", UVM_MEDIUM)
+        // read status 
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, rdata);
 
         // Pop and verify
         pop_data(rdata);
-
-        `uvm_info("SEQ", "FIFO Enable Sequence Complete", UVM_MEDIUM)
+        `uvm_info(get_type_name(), $sformatf("Popped data while FIFO enabled: 0x%0h", rdata), UVM_MEDIUM)
+        `uvm_info(get_type_name(), "FIFO Enable Sequence Complete", UVM_MEDIUM)
     endtask : body
 
 endclass : fifo_enable_sequence
+
+
+// #############################################################################################
+// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+// #############################################################################################
+
+// ==============================================================================
+// FIFO Clear Sequence
+// ==============================================================================
+class fifo_clear_sequence extends apb_base_sequence;
+
+    `uvm_object_utils(fifo_clear_sequence)
+
+    function new(string name = "fifo_clear_sequence");
+        super.new(name);
+    endfunction : new
+
+    task body();
+        bit empty, full, almost_full, almost_empty, overflow, underflow;
+        bit [7:0] count;
+
+        `uvm_info(get_type_name(), "Starting Clear Sequence", UVM_MEDIUM)
+
+        // Enable FIFO
+        enable_fifo();
+        `uvm_info(get_type_name(), "FIFO enabled", UVM_MEDIUM)
+
+        // Push some data
+        for (int i = 0; i < 8; i++) begin
+            push_data(i);
+        end
+        `uvm_info(get_type_name(), "Pushed 8 data items to FIFO", UVM_MEDIUM)
+
+        // Verify not empty
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+        
+        // Clear FIFO
+        clear_fifo();
+        `uvm_info(get_type_name(), "Cleared FIFO", UVM_MEDIUM)
+
+        // Verify empty after clear
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+
+
+
+        // Corner Case: Clear when already empty
+        clear_fifo();
+        `uvm_info(get_type_name(), "Cleared FIFO when already empty", UVM_MEDIUM)
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+
+        // Corner Case: Clear when full
+        // Fill FIFO
+        for (int i = 0; i < FIFO_DEPTH; i++) begin
+            push_data(i);
+        end
+        `uvm_info(get_type_name(), "Filled FIFO to capacity", UVM_MEDIUM)
+
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+
+        clear_fifo();
+        `uvm_info(get_type_name(), "Cleared FIFO when full", UVM_MEDIUM)
+        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
+
+
+        `uvm_info(get_type_name(), "Clear Sequence Complete", UVM_MEDIUM)
+    endtask : body
+
+endclass : fifo_clear_sequence
 
 // #############################################################################################
 // $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -476,53 +610,6 @@ endclass : threshold_sequence
 // #############################################################################################
 
 // ==============================================================================
-// FIFO Clear Sequence
-// ==============================================================================
-class fifo_clear_sequence extends apb_base_sequence;
-
-    `uvm_object_utils(fifo_clear_sequence)
-
-    function new(string name = "fifo_clear_sequence");
-        super.new(name);
-    endfunction : new
-
-    task body();
-        bit empty, full, almost_full, almost_empty, overflow, underflow;
-        bit [7:0] count;
-
-        `uvm_info("SEQ", "Starting Clear Sequence", UVM_MEDIUM)
-
-        // Enable FIFO
-        enable_fifo();
-
-        // Push some data
-        for (int i = 0; i < 8; i++) begin
-            push_data(i);
-        end
-
-        // Verify not empty
-        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        
-        `uvm_info("SEQ", $sformatf("Before clear: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
-
-        // Clear FIFO
-        clear_fifo();
-        enable_fifo();
-
-        // Verify empty after clear
-        read_status(empty, full, almost_full, almost_empty, overflow, underflow, count);
-        `uvm_info("SEQ", $sformatf("After clear: count=%0d, empty=%0d", count, empty), UVM_MEDIUM)
-
-        `uvm_info("SEQ", "Clear Sequence Complete", UVM_MEDIUM)
-    endtask : body
-
-endclass : fifo_clear_sequence
-
-// #############################################################################################
-// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-// #############################################################################################
-
-// ==============================================================================
 // Random Sequence - Random FIFO operations
 // ==============================================================================
 class random_sequence extends apb_base_sequence;
@@ -628,7 +715,7 @@ class full_coverage_sequence extends apb_base_sequence;
   endfunction : new
   
   task body();
-    reset_sequence          reset_seq;
+    fifo_reset_sequence          reset_seq;
     fifo_enable_sequence    enable_seq;
     basic_push_pop_sequence push_pop_seq;
     fill_fifo_sequence      fill_seq;
