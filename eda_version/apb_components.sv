@@ -41,7 +41,7 @@ class apb_sequence_item extends uvm_sequence_item;
         (paddr == DATA_OFFSET) -> pwdata[31:8] == 24'h0;
     }
 
-    // Constraint: Reset is typically high during normal operations
+    // Reset is always high during normal operations
     constraint reset_default_c {
         presetn == 1'b1;
     }
@@ -56,27 +56,10 @@ class apb_sequence_item extends uvm_sequence_item;
     `uvm_field_int(pslverr, UVM_ALL_ON)
     `uvm_object_utils_end
 
+    // Constructor
     function new(string name = "apb_sequence_item");
         super.new(name);
     endfunction : new
-
-    //--------------------------------------------------------------------------
-    // Convert to String (for debug)
-    //--------------------------------------------------------------------------
-    // function string convert2string();
-    //     string s;
-    //     s = $sformatf("\n========== APB Transaction ==========");
-    //     s = {s, $sformatf("\n  Operation : %s", pwrite.name())};
-    //     s = {s, $sformatf("\n  Reset     : %0d", presetn)};
-    //     s = {s, $sformatf("\n  Address   : 0x%02h", paddr)};
-    //     if (pwrite == APB_WRITE)
-    //         s = {s, $sformatf("\n  Write Data: 0x%08h", pwdata)};
-    //     else if (pwrite == APB_READ)
-    //         s = {s, $sformatf("\n  Read Data : 0x%08h", prdata)};
-    //     s = {s, $sformatf("\n  Slave Err : %0d", pslverr)};
-    //     s = {s, "\n======================================\n"};
-    //     return s;
-    // endfunction : convert2string
 
 endclass : apb_sequence_item
 
@@ -150,8 +133,8 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
 
         forever begin
             seq_item_port.get_next_item(item);
-            `uvm_info("Driver", $sformatf("Driving %s transaction: addr=0x%02h, pwdata=0x%0h", item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata),
-                      UVM_MEDIUM)
+            `uvm_info("Driver", $sformatf("Driving %s transaction: addr=0x%02h, pwdata=0x%0h",
+                        item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata), UVM_HIGH)
             drive(item);
             seq_item_port.item_done(item);
         end
@@ -174,7 +157,8 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
             return;
         end
 
-        // Normal operation - ensure reset is deasserted
+        // Normal operation-no reset
+
         // SETUP cycle
         @(posedge vif.PCLK);
         vif.PRESETn <= 1'b1;
@@ -187,6 +171,7 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         // ACCESS cycle
         @(posedge vif.PCLK);
         vif.PENABLE <= 1'b1;
+
         // keep signals stable until PREADY=1
         while (vif.PREADY !== 1'b1) begin
             @(posedge vif.PCLK);
@@ -247,18 +232,13 @@ class apb_monitor extends uvm_monitor;
             @(posedge vif.PCLK);
             #0; // Wait for NBA region to settle (driver's non-blocking assignments)
             
-            // Debug: Log what we see every clock - use direct signals, not clocking block
-            `uvm_info("Monitor", $sformatf("@ %0t: PRESETn=%b PSEL=%b PENABLE=%b PREADY=%b PWRITE=%b PADDR=0x%02h", 
-                      $time, vif.PRESETn, vif.PSEL, vif.PENABLE, vif.PREADY, 
-                      vif.PWRITE, vif.PADDR), UVM_HIGH)
-            
-            // Skip monitoring during reset
-            if (vif.PRESETn !== 1'b1) begin
-                continue;
-            end
+            // for debugging
+            // `uvm_info("Monitor", $sformatf("@ %0t: PRESETn=%b PSEL=%b PENABLE=%b PREADY=%b PWRITE=%b PADDR=0x%02h", 
+            //           $time, vif.PRESETn, vif.PSEL, vif.PENABLE, vif.PREADY, 
+            //           vif.PWRITE, vif.PADDR), UVM_HIGH)            
             
             // APB transfer completes when PSEL=1, PENABLE=1, PREADY=1
-            if (vif.PSEL && vif.PENABLE && vif.PREADY) begin
+            if ((vif.PSEL && vif.PENABLE && vif.PREADY) || vif.PRESETn === 1'b0) begin
                 item = apb_sequence_item::type_id::create("item", this);
                 item.presetn = vif.PRESETn;
                 item.paddr   = vif.PADDR;
@@ -267,7 +247,7 @@ class apb_monitor extends uvm_monitor;
                 item.prdata  = vif.PRDATA;
                 item.pslverr = vif.PSLVERR;
                 `uvm_info("Monitor", $sformatf("Monitoring %s transaction: addr=0x%02h, pwdata=0x%08h, prdata=0x%08h", 
-                          item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata, item.prdata), UVM_MEDIUM)
+                          item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata, item.prdata), UVM_HIGH)
                 ap.write(item);
             end
         end
@@ -550,9 +530,9 @@ class apb_fifo_ref_model;
     //--------------------------------------------------------------------------
     function string print_status();
         string s;
-        s = $sformatf("RefModel State: EN=%0d, Count=%0d/%0d, Empty=%0d, Full=%0d, AF=%0d, AE=%0d, OVF=%0d, UNF=%0d",
-                        en, count, DEPTH, empty_flag, full_flag, 
-                        almost_full_flag, almost_empty_flag, overflow_flag, underflow_flag);
+        s = $sformatf("┃RefModel State: EN=%0d, Count=%0d/%0d, Empty=%0d, Full=%0d, AF=%0d, AE=%0d, OVF=%0d, UNF=%0d   ┃",
+                        en, count, DEPTH, empty_flag, full_flag, almost_full_flag, almost_empty_flag, overflow_flag,
+                        underflow_flag);
         return s;
     endfunction : print_status
 
@@ -606,23 +586,23 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
         
         // Handle reset - reset reference model when PRESETn is low
         if (item.presetn == 1'b0) begin
-            `uvm_info("Scoreboard", "Reset detected - resetting reference model", UVM_MEDIUM)
+            `uvm_info("Scoreboard", "(!!!!!) Reset detected - resetting reference model (!!!!!)", UVM_MEDIUM)
             ref_model.reset();
             return;  // Don't process transaction during reset
         end
         
         total_transactions++;
         
-        `uvm_info("Scoreboard", $sformatf("Processing: %s to Addr=0x%02h, pwrite=%0b", item.pwrite ? "WRITE" : "READ", item.paddr, item.pwrite), UVM_MEDIUM)
+        `uvm_info("Scoreboard", $sformatf("Processing: %s to Addr=0x%02h, pwrite=%0b", item.pwrite ? "WRITE" : "READ", item.paddr, item.pwrite), UVM_HIGH)
         
         // WRITE transactions :
         if (item.pwrite == APB_WRITE) begin
             case (item.paddr)
                 CTRL_OFFSET: ref_model.write_ctrl(item.pwdata);
                 THRESH_OFFSET: ref_model.write_thresh(item.pwdata);
-                STATUS_OFFSET: `uvm_warning("Scoreboard", "STATUS register is read-only, write ignored")
+                STATUS_OFFSET: `uvm_warning("Scoreboard", "(!!!) STATUS register is read-only, write ignored")
                 DATA_OFFSET: void'(ref_model.push(item.pwdata));
-                default: `uvm_warning("Scoreboard", $sformatf("Unknown register address: 0x%02h", item.paddr))
+                default: `uvm_warning("Scoreboard", $sformatf("(!!!) Unknown register address: 0x%02h", item.paddr))
             endcase
         end 
         
@@ -649,7 +629,6 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
             endcase
         end
         
-        `uvm_info("Scoreboard", ref_model.print_status(), UVM_HIGH)
     endfunction : write
 
     //--------------------------------------------------------------------------
@@ -684,7 +663,10 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
             `uvm_error("Scoreboard", $sformatf("============================================================"))
         end else begin
             pass_count++;
-            `uvm_info("Scoreboard", $sformatf("%s Match: 0x%08h", reg_name, actual), UVM_MEDIUM)
+            `uvm_info("Scoreboard", $sformatf("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"), UVM_MEDIUM)
+            `uvm_info("Scoreboard", $sformatf("┃%6s Match: 0x%08h                                                      ┃", reg_name, actual), UVM_MEDIUM)
+            `uvm_info("Scoreboard", ref_model.print_status(), UVM_MEDIUM)
+            `uvm_info("Scoreboard", $sformatf("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"), UVM_MEDIUM)
         end
     endfunction : compare
 
