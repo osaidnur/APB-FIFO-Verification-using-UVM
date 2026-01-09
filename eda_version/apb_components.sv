@@ -402,9 +402,9 @@ class apb_fifo_ref_model;
         if (full_flag) begin
             overflow_flag = 1'b1;
             if (drop_on_full) begin
-                return 1; // overflow without error
+                return 0; // overflow + error
             end
-            return 0; // overflow + error
+            return 1; // overflow without error
         end
         
         fifo_mem.push_back(data);
@@ -598,10 +598,20 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
         // WRITE transactions :
         if (item.pwrite == APB_WRITE) begin
             case (item.paddr)
-                CTRL_OFFSET: ref_model.write_ctrl(item.pwdata);
-                THRESH_OFFSET: ref_model.write_thresh(item.pwdata);
-                STATUS_OFFSET: `uvm_warning("Scoreboard", "(!!!) STATUS register is read-only, write ignored")
-                DATA_OFFSET: void'(ref_model.push(item.pwdata));
+                CTRL_OFFSET: begin
+                    ref_model.write_ctrl(item.pwdata);
+                end
+                THRESH_OFFSET: begin
+                    ref_model.write_thresh(item.pwdata);
+                end
+                STATUS_OFFSET: begin
+                    `uvm_warning("Scoreboard", "(!!!) STATUS register is read-only, write ignored")
+                end
+                DATA_OFFSET: begin
+                    bit push_success;
+                    push_success = ref_model.push(item.pwdata[7:0]);
+                    compare_error(!push_success, item.pslverr);
+                end
                 default: `uvm_warning("Scoreboard", $sformatf("(!!!) Unknown register address: 0x%02h", item.paddr))
             endcase
         end 
@@ -623,13 +633,34 @@ class apb_fifo_scoreboard extends uvm_scoreboard;
                 end
                 DATA_OFFSET: begin
                     expected_data = ref_model.pop(success);
-                    compare("DATA", expected_data, item.prdata);
+
+                    compare("DATA", expected_data, item.prdata[7:0]);
+                    compare_error(!success, item.pslverr);
                 end
                 default: `uvm_warning("SCB", $sformatf("Unknown register address: 0x%02h", item.paddr))
             endcase
         end
         
     endfunction : write
+
+    //--------------------------------------------------------------------------
+    // Compare Error Signal (PSLVERR)
+    //--------------------------------------------------------------------------
+    function void compare_error(bit expected_error, bit actual_error);
+        if (actual_error !== expected_error) begin
+            fail_count++;
+            `uvm_error("Scoreboard", "============================================================")
+            `uvm_error("Scoreboard", $sformatf("PSLVERR Mismatch: Expected=%0b, Actual=%0b", expected_error, actual_error))
+            `uvm_error("Scoreboard", "============================================================")
+        end else begin
+            pass_count++;
+            if (expected_error) begin
+                `uvm_info("Scoreboard", $sformatf("PSLVERR correctly asserted (error expected and occurred)"), UVM_MEDIUM)
+            end else begin
+                `uvm_info("Scoreboard", $sformatf("PSLVERR correctly deasserted (no error)"), UVM_HIGH)
+            end
+        end
+    endfunction : compare_error
 
     //--------------------------------------------------------------------------
     // Compare Expected vs Actual
