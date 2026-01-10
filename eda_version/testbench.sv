@@ -162,7 +162,6 @@ module top_tb;
     // - random_test
     // - full_coverage_test
     // - stress_test
-    // - back_to_back_test
     // - clear_test
     //--------------------------------------------------------------------------
     initial begin

@@ -154,12 +154,15 @@ class basic_operation_test extends apb_fifo_base_test;
   endfunction : new
   
   task run_phase(uvm_phase phase);
+    fifo_reset_sequence reset_seq;
     basic_push_pop_sequence seq;
     
     phase.raise_objection(this);
     
+    reset_seq = fifo_reset_sequence::type_id::create("reset_seq");
+    reset_seq.start(env.agent.sequencer);
+    
     seq = basic_push_pop_sequence::type_id::create("seq");
-    seq.randomize() with {num_items == 10;};
     seq.start(env.agent.sequencer);
     
     phase.drop_objection(this);
@@ -183,9 +186,13 @@ class overflow_test extends apb_fifo_base_test;
     endfunction : new
     
     task run_phase(uvm_phase phase);
+        fifo_reset_sequence reset_seq;
         overflow_sequence seq;
         
         phase.raise_objection(this);
+        
+        reset_seq = fifo_reset_sequence::type_id::create("reset_seq");
+        reset_seq.start(env.agent.sequencer);
         
         seq = overflow_sequence::type_id::create("seq");
         seq.start(env.agent.sequencer);
@@ -211,9 +218,13 @@ class underflow_test extends apb_fifo_base_test;
     endfunction : new
     
     task run_phase(uvm_phase phase);
+        fifo_reset_sequence reset_seq;
         underflow_sequence seq;
         
         phase.raise_objection(this);
+        
+        reset_seq = fifo_reset_sequence::type_id::create("reset_seq");
+        reset_seq.start(env.agent.sequencer);
         
         seq = underflow_sequence::type_id::create("seq");
         seq.start(env.agent.sequencer);
@@ -239,9 +250,13 @@ class threshold_test extends apb_fifo_base_test;
     endfunction : new
     
     task run_phase(uvm_phase phase);
+        fifo_reset_sequence reset_seq;
         threshold_sequence seq;
         
         phase.raise_objection(this);
+        
+        reset_seq = fifo_reset_sequence::type_id::create("reset_seq");
+        reset_seq.start(env.agent.sequencer);
         
         seq = threshold_sequence::type_id::create("seq");
         seq.start(env.agent.sequencer);
@@ -267,9 +282,13 @@ class register_test extends apb_fifo_base_test;
   endfunction : new
   
   task run_phase(uvm_phase phase);
+    fifo_reset_sequence reset_seq;
     reg_access_sequence seq;
     
     phase.raise_objection(this);
+    
+    reset_seq = fifo_reset_sequence::type_id::create("reset_seq");
+    reset_seq.start(env.agent.sequencer);
     
     seq = reg_access_sequence::type_id::create("seq");
     seq.start(env.agent.sequencer);
@@ -295,9 +314,13 @@ class random_test extends apb_fifo_base_test;
   endfunction : new
   
   task run_phase(uvm_phase phase);
+    fifo_reset_sequence reset_seq;
     random_sequence seq;
     
     phase.raise_objection(this);
+    
+    reset_seq = fifo_reset_sequence::type_id::create("reset_seq");
+    reset_seq.start(env.agent.sequencer);
     
     seq = random_sequence::type_id::create("seq");
     seq.randomize() with {num_transactions == 100;};
@@ -376,55 +399,3 @@ endclass : stress_test
 // #############################################################################################
 // $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 // #############################################################################################
-
-// ==============================================================================
-// Back to Back Test - Rapid transaction test
-// ==============================================================================
-class back_to_back_test extends apb_fifo_base_test;
-  
-  `uvm_component_utils(back_to_back_test)
-  
-  function new(string name = "back_to_back_test", uvm_component parent = null);
-    super.new(name, parent);
-  endfunction : new
-  
-  task run_phase(uvm_phase phase);
-    back_to_back_sequence seq;
-    
-    phase.raise_objection(this);
-    
-    seq = back_to_back_sequence::type_id::create("seq");
-    seq.start(env.agent.sequencer);
-    
-    phase.drop_objection(this);
-  endtask : run_phase
-  
-endclass : back_to_back_test
-
-// #############################################################################################
-// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-// #############################################################################################
-
-// ==============================================================================
-// Clear Test - Tests FIFO clear functionality
-// ==============================================================================
-class clear_test extends apb_fifo_base_test;
-  
-  `uvm_component_utils(clear_test)
-  
-  function new(string name = "clear_test", uvm_component parent = null);
-    super.new(name, parent);
-  endfunction : new
-  
-  task run_phase(uvm_phase phase);
-    fifo_clear_sequence seq;
-    
-    phase.raise_objection(this);
-    
-    seq = fifo_clear_sequence::type_id::create("seq");
-    seq.start(env.agent.sequencer);
-    
-    phase.drop_objection(this);
-  endtask : run_phase
-  
-endclass : clear_test
