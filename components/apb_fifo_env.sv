@@ -25,7 +25,7 @@ class apb_fifo_env extends uvm_env;
         // Create scoreboard
         scoreboard = apb_fifo_scoreboard::type_id::create("scoreboard", this);
 
-        // Create coverage collector
+        // Create subscriber (coverage collector)
         subscriber = apb_subscriber::type_id::create("subscriber", this);
     endfunction : build_phase
 
@@ -38,7 +38,7 @@ class apb_fifo_env extends uvm_env;
         // Connect monitor to scoreboard
         agent.monitor.ap.connect(scoreboard.analysis_export);
 
-        // Connect monitor to coverage
+        // Connect monitor to subscriber (coverage collector)
         agent.monitor.ap.connect(subscriber.analysis_export);
     endfunction : connect_phase
 
