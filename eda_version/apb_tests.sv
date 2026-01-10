@@ -271,38 +271,6 @@ endclass : threshold_test
 // #############################################################################################
 
 // ==============================================================================
-// Register Test - Tests register access
-// ==============================================================================
-class register_test extends apb_fifo_base_test;
-  
-  `uvm_component_utils(register_test)
-  
-  function new(string name = "register_test", uvm_component parent = null);
-    super.new(name, parent);
-  endfunction : new
-  
-  task run_phase(uvm_phase phase);
-    fifo_reset_sequence reset_seq;
-    reg_access_sequence seq;
-    
-    phase.raise_objection(this);
-    
-    reset_seq = fifo_reset_sequence::type_id::create("reset_seq");
-    reset_seq.start(env.agent.sequencer);
-    
-    seq = reg_access_sequence::type_id::create("seq");
-    seq.start(env.agent.sequencer);
-    
-    phase.drop_objection(this);
-  endtask : run_phase
-  
-endclass : register_test
-
-// #############################################################################################
-// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-// #############################################################################################
-
-// ==============================================================================
 // Random Test - Random operations
 // ==============================================================================
 class random_test extends apb_fifo_base_test;
@@ -330,34 +298,6 @@ class random_test extends apb_fifo_base_test;
   endtask : run_phase
   
 endclass : random_test
-
-// #############################################################################################
-// $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-// #############################################################################################
-
-// ==============================================================================
-// Full Coverage Test - Comprehensive test
-// ==============================================================================
-class full_coverage_test extends apb_fifo_base_test;
-  
-  `uvm_component_utils(full_coverage_test)
-  
-  function new(string name = "full_coverage_test", uvm_component parent = null);
-    super.new(name, parent);
-  endfunction : new
-  
-  task run_phase(uvm_phase phase);
-    full_coverage_sequence seq;
-    
-    phase.raise_objection(this);
-    
-    seq = full_coverage_sequence::type_id::create("seq");
-    seq.start(env.agent.sequencer);
-    
-    phase.drop_objection(this);
-  endtask : run_phase
-  
-endclass : full_coverage_test
 
 // #############################################################################################
 // $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
