@@ -10,21 +10,34 @@ class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
     task write_reg(bit [7:0] addr, bit [31:0] data);
         apb_sequence_item item = apb_sequence_item::type_id::create("item");
         start_item(item);
+        item.presetn = 1'b1;
         item.pwrite = APB_WRITE;
         item.paddr = addr;
         item.pwdata = data;
         finish_item(item);
+        get_response(item);
     endtask : write_reg
 
     // Read from a register
     task read_reg(bit [7:0] addr, output bit [31:0] data);
         apb_sequence_item item = apb_sequence_item::type_id::create("item");
         start_item(item);
+        item.presetn = 1'b1;
         item.pwrite = APB_READ;
         item.paddr = addr;
         finish_item(item);
+        get_response(item);
         data = item.prdata;
     endtask : read_reg
+
+
+    task reset_fifo();
+        apb_sequence_item item = apb_sequence_item::type_id::create("item");
+        start_item(item);
+        item.presetn = 1'b0; // Assert reset
+        finish_item(item);
+        get_response(item);
+    endtask : reset_fifo
 
     // Push data to FIFO
     task push_data(bit [7:0] data);
@@ -63,6 +76,13 @@ class apb_base_sequence extends uvm_sequence #(apb_sequence_item);
         else
             write_reg(CTRL_OFFSET, ctrl_val & ~32'h4); // Clear DOF bit
     endtask : set_drop_on_full
+
+    task read_thresholds(output bit [7:0] almost_empty_th, output bit [7:0] almost_full_th);
+        bit [31:0] thresh;
+        read_reg(THRESH_OFFSET, thresh);
+        almost_empty_th = thresh[7:0];
+        almost_full_th = thresh[15:8];
+    endtask : read_thresholds
 
     // Read STATUS register
     task read_status(output bit empty, output bit full,output bit almost_full, output bit almost_empty, output bit overflow, output bit underflow, output bit [7:0] count);
