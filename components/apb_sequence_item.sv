@@ -1,7 +1,9 @@
 class apb_sequence_item extends uvm_sequence_item;
+    
+    // Reset signal
+    rand bit presetn;
 
     // inputs to DUT
-    rand bit presetn;  // Reset signal
     rand bit pwrite;
     rand bit [7:0] paddr;
     rand bit [31:0] pwdata;
@@ -10,12 +12,11 @@ class apb_sequence_item extends uvm_sequence_item;
     bit [31:0] prdata;
     bit pslverr;
 
-    // Valid address constraint - only valid register addresses
+    // Valid address constraint
     constraint valid_addr_c {
         paddr inside {CTRL_OFFSET, THRESH_OFFSET, STATUS_OFFSET, DATA_OFFSET};
     }
 
-    
     // CTRL register constraint
     constraint ctrl_reg_c {
         // [0]: EN
@@ -31,21 +32,13 @@ class apb_sequence_item extends uvm_sequence_item;
         (paddr == THRESH_OFFSET) -> pwdata[31:16] == 16'h0;
     }
 
-    // ToDo Write data constraint for DATA register (8-bit) ---------> todo need to check that (the least or most significant 8 bit )
+    // Write data constraint for DATA register (8-bit)
     constraint data_reg_c {
         // data needs just [7:0] valid, upper bits zero
         (paddr == DATA_OFFSET) -> pwdata[31:8] == 24'h0;
     }
 
-    // status register is read-only - no constraint needed
-
-   
-    // // Operation distribution
-    // constraint op_dist_c {
-    // pwrite dist {APB_WRITE := 60, APB_READ := 40};
-    // }
-
-    // Constraint: Reset is typically high during normal operations
+    // Reset is always high during normal operations
     constraint reset_default_c {
         presetn == 1'b1;
     }
@@ -60,26 +53,9 @@ class apb_sequence_item extends uvm_sequence_item;
     `uvm_field_int(pslverr, UVM_ALL_ON)
     `uvm_object_utils_end
 
+    // Constructor
     function new(string name = "apb_sequence_item");
         super.new(name);
     endfunction : new
-
-    //--------------------------------------------------------------------------
-    // Convert to String (for debug)
-    //--------------------------------------------------------------------------
-    function string convert2string();
-        string s;
-        s = $sformatf("\n========== APB Transaction ==========");
-        s = {s, $sformatf("\n  Reset     : %0d", presetn)};
-        s = {s, $sformatf("\n  Operation : %s", pwrite.name())};
-        s = {s, $sformatf("\n  Address   : 0x%02h", paddr)};
-        if (pwrite == APB_WRITE)
-            s = {s, $sformatf("\n  Write Data: 0x%08h", pwdata)};
-        else if (pwrite == APB_READ)
-            s = {s, $sformatf("\n  Read Data : 0x%08h", prdata)};
-        s = {s, $sformatf("\n  Slave Err : %0d", pslverr)};
-        s = {s, "\n======================================\n"};
-        return s;
-    endfunction : convert2string
 
 endclass : apb_sequence_item
