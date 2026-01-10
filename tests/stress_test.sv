@@ -1,6 +1,3 @@
-//------------------------------------------------------------------------------
-// Stress Test - High volume random test
-//------------------------------------------------------------------------------
 class stress_test extends apb_fifo_base_test;
   
   `uvm_component_utils(stress_test)
@@ -11,7 +8,7 @@ class stress_test extends apb_fifo_base_test;
   
   task run_phase(uvm_phase phase);
     random_sequence seq;
-    clear_sequence  clear_seq;
+    fifo_clear_sequence  clear_seq;
     
     phase.raise_objection(this);
     
@@ -22,7 +19,7 @@ class stress_test extends apb_fifo_base_test;
       seq.start(env.agent.sequencer);
       
       // Clear FIFO between iterations
-      clear_seq = clear_sequence::type_id::create("clear_seq");
+      clear_seq = fifo_clear_sequence::type_id::create("clear_seq");
       clear_seq.start(env.agent.sequencer);
     end
     

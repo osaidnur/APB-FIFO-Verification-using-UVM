@@ -21,20 +21,17 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         end
     endfunction : build_phase
 
-
     // --------------------------------------------------------------------------
-    // Drive Idle - Reset signals to default/idle state
+    // Reset Signals
     // --------------------------------------------------------------------------
     task drive_idle();
-        vif.drv_cb.PRESETn <= 1'b1;  // Keep reset deasserted during idle
-        vif.drv_cb.PSEL <= 1'b0;
-        vif.drv_cb.PENABLE <= 1'b0;
-        vif.drv_cb.PWRITE <= 1'b0;
-        vif.drv_cb.PADDR <= 8'h0;
-        vif.drv_cb.PWDATA <= 32'h0;
+        vif.PRESETn <= 1'b1;
+        vif.PSEL <= 1'b0;
+        vif.PENABLE <= 1'b0;
+        vif.PWRITE <= 1'b0;
+        vif.PADDR <= 8'h0;
+        vif.PWDATA <= 32'h0;
     endtask : drive_idle
-
-
 
     // --------------------------------------------------------------------------
     // Run Phase
@@ -45,147 +42,61 @@ class apb_driver extends uvm_driver #(apb_sequence_item);
         // Initialize APB signals
         drive_idle();
 
-        // Wait for reset to complete
-        // @(posedge vif.PRESETn);
-        // @(posedge vif.PCLK);
-
         forever begin
             seq_item_port.get_next_item(item);
+            `uvm_info("Driver", $sformatf("Driving %s transaction: addr=0x%02h, pwdata=0x%0h",
+                        item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata), UVM_HIGH)
             drive(item);
-            
-            // case (item.pwrite)
-            // APB_WRITE: drive_write(item);
-            // APB_READ:  drive_read(item);
-            // APB_IDLE:  drive_idle();
-            // endcase
-            
-            seq_item_port.item_done();
+            seq_item_port.item_done(item);
         end
     endtask : run_phase
 
-
-    
-
-    // // --------------------------------------------------------------------------
-    // // Drive Write Transaction (APB3 Protocol)
-    // // --------------------------------------------------------------------------
-    // task drive_write(apb_sequence_item item);
-    //     `uvm_info("APB_DRV", $sformatf("Driving WRITE: Addr=0x%02h, Data=0x%08h", 
-    //                 item.paddr, item.pwdata), UVM_HIGH)
-
-    //     // Setup Phase
-    //     @(vif.drv_cb);
-    //     vif.drv_cb.PSEL    <= 1'b1;
-    //     vif.drv_cb.PENABLE <= 1'b0;
-    //     vif.drv_cb.PWRITE  <= 1'b1;
-    //     vif.drv_cb.PADDR   <= item.paddr;
-    //     vif.drv_cb.PWDATA  <= item.pwdata;
-
-    //     // Access Phase
-    //     @(vif.drv_cb);
-    //     vif.drv_cb.PENABLE <= 1'b1;
-
-    //     // Wait for PREADY
-    //     do begin
-    //         @(vif.drv_cb);
-    //     end while (!vif.drv_cb.PREADY);
-
-    //     // Capture response
-    //     item.pslverr = vif.drv_cb.PSLVERR;
-
-    //     // End transaction
-    //     vif.drv_cb.PSEL    <= 1'b0;
-    //     vif.drv_cb.PENABLE <= 1'b0;
-
-    //     `uvm_info("APB_DRV", $sformatf("WRITE Complete: Addr=0x%02h, SlvErr=%0d", 
-    //                 item.paddr, item.pslverr), UVM_HIGH)
-    // endtask : drive_write
-
-    // //--------------------------------------------------------------------------
-    // // Drive Read Transaction (APB3 Protocol)
-    // //--------------------------------------------------------------------------
-    // task drive_read(apb_sequence_item item);
-    //     `uvm_info("APB_DRV", $sformatf("Driving READ: Addr=0x%02h", item.paddr), UVM_HIGH)
-
-    //     // Setup Phase
-    //     @(vif.drv_cb);
-    //     vif.drv_cb.PSEL <= 1'b1;
-    //     vif.drv_cb.PENABLE <= 1'b0;
-    //     vif.drv_cb.PWRITE <= 1'b0;
-    //     vif.drv_cb.PADDR <= item.paddr;
-    //     vif.drv_cb.PWDATA <= 32'h0;
-
-    //     // Access Phase
-    //     @(vif.drv_cb);
-    //     vif.drv_cb.PENABLE <= 1'b1;
-
-    //     // Wait for PREADY
-    //     do begin
-    //         @(vif.drv_cb);
-    //     end while (!vif.drv_cb.PREADY);
-
-    //     // Capture response
-    //     item.prdata  = vif.drv_cb.PRDATA;
-    //     item.pslverr = vif.drv_cb.PSLVERR;
-
-    //     // End transaction
-    //     vif.drv_cb.PSEL    <= 1'b0;
-    //     vif.drv_cb.PENABLE <= 1'b0;
-
-    //     `uvm_info("APB_DRV", $sformatf("READ Complete: Addr=0x%02h, Data=0x%08h, SlvErr=%0d", 
-    //                 item.paddr, item.prdata, item.pslverr), UVM_HIGH)
-    // endtask : drive_read
-
+    // --------------------------------------------------------------------------
+    // Drive APB Transaction
+    // --------------------------------------------------------------------------
     task drive(apb_sequence_item tr);
         
-        // Drive reset signal from transaction
-        vif.drv_cb.PRESETn <= tr.presetn;
-        
-        // If reset is asserted, just drive reset and return
+        // If reset is asserted, just drive reset and idle signals
         if (tr.presetn == 1'b0) begin
-            vif.drv_cb.PSEL <= 1'b0;
-            vif.drv_cb.PENABLE <= 1'b0;
-            vif.drv_cb.PWRITE <= 1'b0;
-            vif.drv_cb.PADDR <= 8'h0;
-            vif.drv_cb.PWDATA <= 32'h0;
-            @(vif.drv_cb);
+            @(posedge vif.PCLK);
+            vif.PRESETn <= 1'b0;
+            vif.PSEL <= 1'b0;
+            vif.PENABLE <= 1'b0;
+            vif.PWRITE <= 1'b0;
+            vif.PADDR <= 8'h0;
+            vif.PWDATA <= 32'h0;
             return;
         end
 
-        // -------------------------
+        // Normal operation-no reset
+
         // SETUP cycle
-        // -------------------------
         @(posedge vif.PCLK);
-        vif.drv_cb.PRESETn <= tr.presetn;
+        vif.PRESETn <= 1'b1;
         vif.PSEL <= 1'b1;
         vif.PENABLE <= 1'b0;
         vif.PWRITE <= tr.pwrite;
         vif.PADDR <= tr.paddr;
         vif.PWDATA <= tr.pwdata;
 
-        // -------------------------
-        // ACCESS cycle(s)
-        // -------------------------
+        // ACCESS cycle
         @(posedge vif.PCLK);
         vif.PENABLE <= 1'b1;
 
-        // Wait states support: keep signals stable until PREADY=1
+        // keep signals stable until PREADY=1
         while (vif.PREADY !== 1'b1) begin
             @(posedge vif.PCLK);
         end
 
-        // Transfer completes on the cycle with PREADY=1 while PSEL&PENABLE=1
+        // The transfer is completed here, so take the outputs
         tr.pslverr = vif.PSLVERR;
         if (!tr.pwrite) begin
             tr.prdata = vif.PRDATA;
         end
 
-        // -------------------------
         // Return to IDLE
-        // -------------------------
         @(posedge vif.PCLK);
         drive_idle();
     endtask
-
 
 endclass : apb_driver

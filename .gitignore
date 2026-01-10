@@ -4,4 +4,7 @@ simv
 *.log
 *.key
 *.json
+*.h
+*.vcd
+*.vdb
 bug_report

@@ -30,11 +30,6 @@ class apb_fifo_ref_model;
         reset();
     endfunction : new
 
-
-    // ################################################################################
-    // Basic Operations
-    // ################################################################################
-
     //------------------------------------------------------
     // Reset
     //------------------------------------------------------
@@ -78,14 +73,9 @@ class apb_fifo_ref_model;
         count = fifo_mem.size();
         empty_flag = (count == 0);
         full_flag = (count >= DEPTH);
-        almost_full_flag = (count >= almost_full_th);
+        almost_full_flag = (count > almost_full_th);
         almost_empty_flag = (count <= almost_empty_th);
     endfunction : update_flags
-
-
-    // #################################################################################
-    // FIFO Operations
-    // #################################################################################
 
     //------------------------------------------------------
     // Push Operation - 1:success, 0:failed 
@@ -98,9 +88,9 @@ class apb_fifo_ref_model;
         if (full_flag) begin
             overflow_flag = 1'b1;
             if (drop_on_full) begin
-                return 1; // overflow without error
+                return 0; // overflow + error
             end
-            return 0; // overflow + error
+            return 1; // overflow without error
         end
         
         fifo_mem.push_back(data);
@@ -113,7 +103,6 @@ class apb_fifo_ref_model;
     // is successful, success=0 otherwise(underflow or disabled)
     //------------------------------------------------------
     function bit [WIDTH-1:0] pop(output bit success);
-        // note: the success here handles the edge case when the popped data is zero
         bit [WIDTH-1:0] data;
         
         if (!en) begin
@@ -133,11 +122,6 @@ class apb_fifo_ref_model;
         return data;
     endfunction : pop
 
-
-    // #################################################################################
-    // Register Write Operations
-    // #################################################################################
-
     //------------------------------------------------------
     // Write CTRL register
     //------------------------------------------------------
@@ -153,6 +137,13 @@ class apb_fifo_ref_model;
     endfunction : write_ctrl
 
     //------------------------------------------------------
+    // Read CTRL register
+    //------------------------------------------------------
+    function bit [31:0] read_ctrl();
+        return {29'h0, drop_on_full, clr, en};
+    endfunction : read_ctrl
+
+    //------------------------------------------------------
     // Write THRESH register
     //------------------------------------------------------
     function void write_thresh(bit [31:0] data);
@@ -160,18 +151,6 @@ class apb_fifo_ref_model;
         almost_empty_th = data[15:8];
         update_flags();
     endfunction : write_thresh
-
-
-    // #################################################################################
-    // Register Read Operations
-    // #################################################################################
-
-    //------------------------------------------------------
-    // Read CTRL register
-    //------------------------------------------------------
-    function bit [31:0] read_ctrl();
-        return {29'h0, drop_on_full, clr, en};
-    endfunction : read_ctrl
 
     //------------------------------------------------------
     // Read THRESH register
@@ -187,11 +166,6 @@ class apb_fifo_ref_model;
         update_flags();
         return {18'h0, count[7:0], underflow_flag, overflow_flag, almost_empty_flag, almost_full_flag, full_flag, empty_flag};
     endfunction : read_status
-
-
-    // #################################################################################
-    // Getters Functions
-    // #################################################################################
 
     function bit is_empty();
         return empty_flag;
@@ -237,16 +211,15 @@ class apb_fifo_ref_model;
         return almost_empty_th;
     endfunction : get_almost_empty_th
 
-
     //--------------------------------------------------------------------------
     // Debug: Get FIFO contents as string
     //--------------------------------------------------------------------------
     function string print_status();
-    string s;
-    s = $sformatf("RefModel State: EN=%0d, Count=%0d/%0d, Empty=%0d, Full=%0d, AF=%0d, AE=%0d, OVF=%0d, UNF=%0d",
-                    en, count, DEPTH, empty_flag, full_flag, 
-                    almost_full_flag, almost_empty_flag, overflow_flag, underflow_flag);
-    return s;
+        string s;
+        s = $sformatf("┃RefModel State: EN=%0d, Count=%0d/%0d, Empty=%0d, Full=%0d, AF=%0d, AE=%0d, OVF=%0d, UNF=%0d   ┃",
+                        en, count, DEPTH, empty_flag, full_flag, almost_full_flag, almost_empty_flag, overflow_flag,
+                        underflow_flag);
+        return s;
     endfunction : print_status
 
 endclass : apb_fifo_ref_model
