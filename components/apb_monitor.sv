@@ -28,20 +28,26 @@ class apb_monitor extends uvm_monitor;
     task run_phase(uvm_phase phase);
         apb_sequence_item item;
 
-        // Wait for reset to complete
-        @(posedge vif.PRESETn);
-
         forever begin
             @(posedge vif.PCLK);
+            #0; // Wait for NBA region to settle (driver's non-blocking assignments)
+            
+            // for debugging
+            // `uvm_info("Monitor", $sformatf("@ %0t: PRESETn=%b PSEL=%b PENABLE=%b PREADY=%b PWRITE=%b PADDR=0x%02h", 
+            //           $time, vif.PRESETn, vif.PSEL, vif.PENABLE, vif.PREADY, 
+            //           vif.PWRITE, vif.PADDR), UVM_HIGH)            
+            
             // APB transfer completes when PSEL=1, PENABLE=1, PREADY=1
-            if (vif.PSEL && vif.PENABLE && vif.PREADY) begin
+            if ((vif.PSEL && vif.PENABLE && vif.PREADY) || vif.PRESETn === 1'b0) begin
                 item = apb_sequence_item::type_id::create("item", this);
-
+                item.presetn = vif.PRESETn;
                 item.paddr   = vif.PADDR;
                 item.pwrite  = vif.PWRITE;
                 item.pwdata  = vif.PWDATA;
                 item.prdata  = vif.PRDATA;
                 item.pslverr = vif.PSLVERR;
+                `uvm_info("Monitor", $sformatf("Monitoring %s transaction: addr=0x%02h, pwdata=0x%08h, prdata=0x%08h", 
+                          item.pwrite ? "WRITE" : "READ", item.paddr, item.pwdata, item.prdata), UVM_HIGH)
                 ap.write(item);
             end
         end
