@@ -5,7 +5,7 @@ class apb_sequence_item extends uvm_sequence_item;
 
     // inputs to DUT
     rand bit pwrite;
-    rand bit [7:0] paddr;
+    randc bit [7:0] paddr;
     rand bit [31:0] pwdata;
 
     // outputs from DUT

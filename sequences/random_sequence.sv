@@ -8,14 +8,14 @@ class random_sequence extends apb_base_sequence;
     num_transactions inside {[50:200]};
   }
   
-  function new(string name = "random_sequence");
+  function new(string name = "=================== random_sequence ===================");
     super.new(name);
   endfunction : new
   
   task body();
     apb_sequence_item item;
     
-    `uvm_info("SEQ", $sformatf("Starting Random Sequence with %0d transactions", num_transactions), UVM_MEDIUM)
+    `uvm_info(get_type_name(), $sformatf("Starting Random Sequence with %0d transactions", num_transactions), UVM_MEDIUM)
     
     // Enable FIFO first
     enable_fifo();
@@ -25,15 +25,17 @@ class random_sequence extends apb_base_sequence;
       start_item(item);
       
       if (!item.randomize()) begin
-        `uvm_error("SEQ", "Randomization failed")
+        `uvm_error(get_type_name(), "Randomization failed")
       end
       
       finish_item(item);
+      get_response(item);
       
-      `uvm_info("SEQ", $sformatf("Transaction %0d: %s", i, item.convert2string()), UVM_HIGH)
+      
+      // `uvm_info(get_type_name(), $sformatf("Transaction %0d: %s", i, item.convert2string()), UVM_HIGH)
     end
     
-    `uvm_info("SEQ", "Random Sequence Complete", UVM_MEDIUM)
+    `uvm_info(get_type_name(), "================= Random Sequence Complete ===================", UVM_MEDIUM)
   endtask : body
   
 endclass : random_sequence
