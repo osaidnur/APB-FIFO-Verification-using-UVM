@@ -8,7 +8,7 @@ class apb_sequence_item extends uvm_sequence_item;
 
     // inputs to DUT
     rand bit pwrite;
-    rand bit [7:0] paddr;
+    rand cbit [7:0] paddr;
     rand bit [31:0] pwdata;
 
     // outputs from DUT
@@ -396,7 +396,7 @@ class apb_fifo_ref_model;
     //------------------------------------------------------
     function bit push(bit [WIDTH-1:0] data);
         if (!en) begin
-            return 0; // FIFO is disabled
+            return 1; // FIFO is disabled, but no error
         end
         
         if (full_flag) begin
