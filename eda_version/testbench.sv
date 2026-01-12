@@ -155,14 +155,13 @@ module top_tb;
     // Tests Map:
     // - reset_test
     // - basic_operation_test
+    // - fifo_clear_test
+    // - fifo_enable_test
     // - overflow_test
     // - underflow_test
     // - threshold_test
-    // - register_test
     // - random_test
-    // - full_coverage_test
     // - stress_test
-    // - clear_test
     //--------------------------------------------------------------------------
     initial begin
         run_test("basic_operation_test");
