@@ -22,7 +22,6 @@
 - [Bugs Discovered](#-bugs-discovered)
 - [Quick Start](#-quick-start)
 - [Coverage](#-coverage)
-- [Author](#-author)
 
 ---
 
